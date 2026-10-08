@@ -1,4 +1,4 @@
-# Minecraft IoT (Sensor Display Mod)
+# Minecraft IoT
 
 Minecraft 1.7.10 Forge 模组：传感器、显示器、执行器与信号域（技能0）组成的"机器物联网"。
 贴方块采样 NBT → 表达式格式化 → 多方块大屏显示 / 红石输出 / 值信号远程传递，并支持

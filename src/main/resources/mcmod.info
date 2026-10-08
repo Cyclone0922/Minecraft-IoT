@@ -1,14 +1,14 @@
 [
 {
-  "modid": "sensordisplay",
-  "name": "Sensor Display Mod",
-  "description": "Example placeholder mod.",
+  "modid": "minecraftiot",
+  "name": "Minecraft IoT",
+  "description": "Minecraft IoT: sensor, display, actuator and signal-domain network. Sensors sample machine NBT, displays form large multi-block screens, actuators drive redstone/signals via expressions, connector workbench configures display templates offline. Remote GUI and multiblock machine parsing supported.",
   "version": "${version}",
   "mcversion": "${mcversion}",
-  "url": "",
+  "url": "https://github.com/Cyclone0922/Minecraft-IoT",
   "updateUrl": "",
-  "authorList": ["ExampleDude"],
-  "credits": "The Forge and FML guys, for making this example",
+  "authorList": ["Cyclone0922"],
+  "credits": "Forge/FML, and the mod teams of CoFH/TE, IC2, Railcraft, BuildCraft, GregTech for runtime integration testing.",
   "logoFile": "",
   "screenshots": [],
   "dependencies": []
