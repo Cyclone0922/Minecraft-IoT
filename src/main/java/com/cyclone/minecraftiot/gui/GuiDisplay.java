@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.gui;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.network.PacketOpenRemoteGui;
 import com.cyclone.minecraftiot.network.PacketSetDisplayFace;
 import com.cyclone.minecraftiot.network.PacketSetDisplaySettings;
@@ -234,7 +234,7 @@ public class GuiDisplay extends GuiContainer {
                 if (inRect(mouseX, mouseY, i + FACE_BTN_X0 + d * FACE_BTN_W, j + FACE_Y, FACE_BTN_W, BTN_H)) {
                     currentFace = DIR_FACE[d];
                     if (tileDisplay != null) {
-                        SensorDisplayMod.network.sendToServer(new PacketSetDisplayFace(
+                        MinecraftIotMod.network.sendToServer(new PacketSetDisplayFace(
                                 tileDisplay.xCoord, tileDisplay.yCoord, tileDisplay.zCoord, currentFace));
                     }
                     return;
@@ -284,7 +284,7 @@ public class GuiDisplay extends GuiContainer {
             for (int[] b : cardButtons) {
                 if (inRect(mouseX, mouseY, i + b[1], j + b[2], b[3], b[4])) {
                     if (tileDisplay != null) {
-                        SensorDisplayMod.network.sendToServer(new PacketOpenRemoteGui(
+                        MinecraftIotMod.network.sendToServer(new PacketOpenRemoteGui(
                                 tileDisplay.xCoord, tileDisplay.yCoord, tileDisplay.zCoord, b[0]));
                     }
                     return;
@@ -298,7 +298,7 @@ public class GuiDisplay extends GuiContainer {
     private void applySettings() {
         if (tileDisplay == null) return;
         tileDisplay.applySettingsClient(guiFontSize, guiAlign, guiTextRot, guiMode, guiOverflow, guiColumns);
-        SensorDisplayMod.network.sendToServer(new PacketSetDisplaySettings(
+        MinecraftIotMod.network.sendToServer(new PacketSetDisplaySettings(
                 tileDisplay.xCoord, tileDisplay.yCoord, tileDisplay.zCoord,
                 guiFontSize, guiAlign, guiTextRot, guiMode, guiOverflow, guiColumns));
     }

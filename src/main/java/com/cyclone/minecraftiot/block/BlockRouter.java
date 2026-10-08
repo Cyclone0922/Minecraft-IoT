@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.block;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileRouter;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -40,7 +40,7 @@ public class BlockRouter extends Block {
             TileEntity te = world.getTileEntity(x, y, z);
             if (te instanceof TileRouter) {
                 TileRouter r = (TileRouter) te;
-                SensorDisplayMod.log.info("[Router@" + x + "," + y + "," + z + "]"
+                MinecraftIotMod.log.info("[Router@" + x + "," + y + "," + z + "]"
                         + " mac=" + r.getMac()
                         + " alias=" + r.getAlias()
                         + " IE=" + r.getEnergy().getIe() + "/" + r.getEnergy().getIeCapacity());

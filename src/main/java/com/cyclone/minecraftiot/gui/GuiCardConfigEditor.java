@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.gui;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.network.PacketWorkbenchAction;
 import com.cyclone.minecraftiot.network.PacketWorkbenchData;
 import com.cyclone.minecraftiot.network.PacketWorkbenchRequest;
@@ -75,7 +75,7 @@ public class GuiCardConfigEditor extends GuiScreen {
         // 每 20 tick 向服务端请求最新目标 NBT，动态刷新变量（游戏刻不暂停，方便观察动态值）
         if (++refreshTick >= 20) {
             refreshTick = 0;
-            SensorDisplayMod.network.sendToServer(new PacketWorkbenchRequest(
+            MinecraftIotMod.network.sendToServer(new PacketWorkbenchRequest(
                     workbench.xCoord, workbench.yCoord, workbench.zCoord));
         }
     }
@@ -196,7 +196,7 @@ public class GuiCardConfigEditor extends GuiScreen {
 
     private void save() {
         String expr = exprField.getText();
-        SensorDisplayMod.network.sendToServer(new PacketWorkbenchAction(
+        MinecraftIotMod.network.sendToServer(new PacketWorkbenchAction(
                 workbench.xCoord, workbench.yCoord, workbench.zCoord,
                 TileConnectorWorkbench.ACTION_SAVE_EXPR, expr));
         close();
@@ -207,7 +207,7 @@ public class GuiCardConfigEditor extends GuiScreen {
         // 不能在这里 new ContainerConnectorWorkbench —— 客户端新建的 Container 与
         // openContainer（服务端同步对象）分叉：拖出卡后服务端槽位已扣、但客户端 GUI 仍
         // 从本地 tile 读到卡，退出/重开 GUI 时表现为"卡自动回到工作台"。
-        Minecraft.getMinecraft().thePlayer.openGui(SensorDisplayMod.instance,
+        Minecraft.getMinecraft().thePlayer.openGui(MinecraftIotMod.instance,
                 com.cyclone.minecraftiot.gui.GuiHandler.GUI_WORKBENCH,
                 Minecraft.getMinecraft().theWorld,
                 workbench.xCoord, workbench.yCoord, workbench.zCoord);

@@ -29,7 +29,7 @@ public class CommonProxy {
      * 注册 GUI 处理器（通用）
      */
     public void registerGuiHandler() {
-        NetworkRegistry.INSTANCE.registerGuiHandler(SensorDisplayMod.instance, new GuiHandler());
+        NetworkRegistry.INSTANCE.registerGuiHandler(MinecraftIotMod.instance, new GuiHandler());
     }
 
     /**

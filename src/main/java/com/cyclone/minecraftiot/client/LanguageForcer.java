@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.client;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import net.minecraft.client.Minecraft;
@@ -43,7 +43,7 @@ public class LanguageForcer {
                 Map<String, Language> map = (Map<String, Language>) f.get(lm);
                 if (map != null) map.put("zh_CN", zh);
             } catch (Throwable t) {
-                SensorDisplayMod.log.warn("[LanguageForcer] inject languageMap failed (non-fatal): " + t);
+                MinecraftIotMod.log.warn("[LanguageForcer] inject languageMap failed (non-fatal): " + t);
             }
 
             // 2) 设为当前语言并重载翻译（en_US 兜底 + zh_CN 覆盖）
@@ -53,9 +53,9 @@ public class LanguageForcer {
                 mc.gameSettings.language = "zh_CN";
                 mc.gameSettings.saveOptions();
             }
-            SensorDisplayMod.log.info("[LanguageForcer] forced current language to zh_CN, translations reloaded");
+            MinecraftIotMod.log.info("[LanguageForcer] forced current language to zh_CN, translations reloaded");
         } catch (Throwable t) {
-            SensorDisplayMod.log.error("[LanguageForcer] failed: ", t);
+            MinecraftIotMod.log.error("[LanguageForcer] failed: ", t);
         }
     }
 }

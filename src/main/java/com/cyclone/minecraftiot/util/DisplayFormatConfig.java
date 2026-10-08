@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.util;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -60,9 +60,9 @@ public class DisplayFormatConfig {
             Map<String, Template> map = gson.fromJson(reader, type);
             reader.close();
             if (map != null) templates = map;
-            SensorDisplayMod.log.info("[DisplayFormatConfig] loaded " + templates.size() + " template(s) from " + f.getAbsolutePath());
+            MinecraftIotMod.log.info("[DisplayFormatConfig] loaded " + templates.size() + " template(s) from " + f.getAbsolutePath());
         } catch (Exception e) {
-            SensorDisplayMod.log.error("[DisplayFormatConfig] failed to load " + f.getAbsolutePath() + ", fallback to raw NBT", e);
+            MinecraftIotMod.log.error("[DisplayFormatConfig] failed to load " + f.getAbsolutePath() + ", fallback to raw NBT", e);
         }
     }
 
@@ -106,9 +106,9 @@ public class DisplayFormatConfig {
             FileWriter w = new FileWriter(f);
             gson.toJson(templates, w);
             w.close();
-            SensorDisplayMod.log.info("[DisplayFormatConfig] wrote template for " + className + " -> " + f.getAbsolutePath());
+            MinecraftIotMod.log.info("[DisplayFormatConfig] wrote template for " + className + " -> " + f.getAbsolutePath());
         } catch (Exception e) {
-            SensorDisplayMod.log.error("[DisplayFormatConfig] failed to write template for " + className, e);
+            MinecraftIotMod.log.error("[DisplayFormatConfig] failed to write template for " + className, e);
         }
     }
 
@@ -150,9 +150,9 @@ public class DisplayFormatConfig {
             w.write("  }\n");
             w.write("}\n");
             w.close();
-            SensorDisplayMod.log.info("[DisplayFormatConfig] wrote default config " + f.getAbsolutePath());
+            MinecraftIotMod.log.info("[DisplayFormatConfig] wrote default config " + f.getAbsolutePath());
         } catch (Exception e) {
-            SensorDisplayMod.log.error("[DisplayFormatConfig] failed to write default config", e);
+            MinecraftIotMod.log.error("[DisplayFormatConfig] failed to write default config", e);
         }
     }
 }

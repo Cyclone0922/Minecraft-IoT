@@ -47,16 +47,16 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 @Mod(modid = "minecraftiot", name = "Minecraft IoT", version = "1.0")
-public class SensorDisplayMod {
+public class MinecraftIotMod {
     public static final String MODID = "minecraftiot";
     public static final String VERSION = "1.0";
-    // SensorDisplayMod.java
+    // MinecraftIotMod.java
     public static final SimpleNetworkWrapper network = NetworkRegistry.INSTANCE.newSimpleChannel(MODID);
     // 诊断日志
     public static final Logger log = LogManager.getLogger("minecraftiot");
 
     @Instance(MODID)
-    public static SensorDisplayMod instance;
+    public static MinecraftIotMod instance;
 
     @SidedProxy(clientSide = "com.cyclone.minecraftiot.client.ClientProxy",
             serverSide = "com.cyclone.minecraftiot.CommonProxy")

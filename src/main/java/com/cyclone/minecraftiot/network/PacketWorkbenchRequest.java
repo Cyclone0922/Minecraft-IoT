@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.network;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileConnectorWorkbench;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;

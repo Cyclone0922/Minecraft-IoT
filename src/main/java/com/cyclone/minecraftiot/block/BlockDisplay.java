@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.block;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileDisplay;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -132,7 +132,7 @@ public class BlockDisplay extends Block {
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
         if (!world.isRemote) {
-            player.openGui(SensorDisplayMod.instance, 1, world, x, y, z);
+            player.openGui(MinecraftIotMod.instance, 1, world, x, y, z);
         }
         return true;
     }

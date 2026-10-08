@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.network;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.gui.GuiHandler;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
@@ -47,8 +47,8 @@ public class RemoteGuiReturn {
             if (p.player.playerNetServerHandler == null || p.player.openContainer != p.remote) {
                 it.remove();
                 if (p.player.playerNetServerHandler != null) {
-                    SensorDisplayMod.log.info("[RemoteGUI] returning to display at (" + p.dx + "," + p.dy + "," + p.dz + ")");
-                    p.player.openGui(SensorDisplayMod.MODID, GuiHandler.GUI_DISPLAY,
+                    MinecraftIotMod.log.info("[RemoteGUI] returning to display at (" + p.dx + "," + p.dy + "," + p.dz + ")");
+                    p.player.openGui(MinecraftIotMod.MODID, GuiHandler.GUI_DISPLAY,
                             p.player.worldObj, p.dx, p.dy, p.dz);
                 }
             }

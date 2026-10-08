@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.block;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileConnectorWorkbench;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -46,7 +46,7 @@ public class BlockConnectorWorkbench extends Block {
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player,
                                     int side, float hitX, float hitY, float hitZ) {
         if (!world.isRemote) {
-            player.openGui(SensorDisplayMod.instance, 4, world, x, y, z); // GUI_WORKBENCH=4
+            player.openGui(MinecraftIotMod.instance, 4, world, x, y, z); // GUI_WORKBENCH=4
         }
         return true;
     }

@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.gui;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.network.PacketBindConnector;
 import com.cyclone.minecraftiot.network.PacketSetSensorLabel;
 import com.cyclone.minecraftiot.tileentity.TileSensor;
@@ -215,7 +215,7 @@ public class GuiSensor extends GuiContainer {
         // "保存注释"按钮：需先选中方向，把方向索引一起发给服务端
         if (inRect(mouseX, mouseY, i + NOTE_BTN_X, j + NOTE_Y, NOTE_BTN_W, NOTE_H)) {
             if (tileSensor != null && selectedIndex >= 0) {
-                SensorDisplayMod.network.sendToServer(new PacketSetSensorLabel(tileSensor.xCoord, tileSensor.yCoord, tileSensor.zCoord, selectedIndex, noteField.getText()));
+                MinecraftIotMod.network.sendToServer(new PacketSetSensorLabel(tileSensor.xCoord, tileSensor.yCoord, tileSensor.zCoord, selectedIndex, noteField.getText()));
             }
             return;
         }
@@ -291,7 +291,7 @@ public class GuiSensor extends GuiContainer {
     /** 确认命名：把方向 + 自定义名字发给服务端绑定并关闭弹窗 */
     private void confirmNaming() {
         if (tileSensor != null) {
-            SensorDisplayMod.network.sendToServer(new PacketBindConnector(tileSensor.xCoord, tileSensor.yCoord, tileSensor.zCoord, selectedIndex, nameField.getText()));
+            MinecraftIotMod.network.sendToServer(new PacketBindConnector(tileSensor.xCoord, tileSensor.yCoord, tileSensor.zCoord, selectedIndex, nameField.getText()));
         }
         naming = false;
     }

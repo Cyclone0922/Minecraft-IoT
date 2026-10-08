@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.tileentity;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.item.ItemConnector;
 import com.cyclone.minecraftiot.network.PacketSensorData;
 import com.cyclone.minecraftiot.util.BoilerAggregator;
@@ -61,7 +61,7 @@ public class TileSensor extends TileEntity implements IInventory {
     /** 把扫描结果 + 原始NBT + 每方向注释 + 锅炉聚合数据 + 完整NBT 推送给客户端 */
     private void syncScanToClient() {
         if (worldObj == null || worldObj.isRemote) return;
-        SensorDisplayMod.network.sendToDimension(new PacketSensorData(xCoord, yCoord, zCoord, scanResults, rawResults, labels, boilerData, rawNbt), worldObj.provider.dimensionId);
+        MinecraftIotMod.network.sendToDimension(new PacketSensorData(xCoord, yCoord, zCoord, scanResults, rawResults, labels, boilerData, rawNbt), worldObj.provider.dimensionId);
     }
 
     /** 客户端侧：接收服务端推送的扫描结果、原始NBT、完整NBT、每方向注释与锅炉聚合数据（仅客户端调用） */
@@ -217,7 +217,7 @@ public class TileSensor extends TileEntity implements IInventory {
             }
         }
         // 诊断日志：输出本次扫描结果
-        SensorDisplayMod.log.info("[TileSensor@" + xCoord + "," + yCoord + "," + zCoord + "] scan=" + joinNonNull(scanResults));
+        MinecraftIotMod.log.info("[TileSensor@" + xCoord + "," + yCoord + "," + zCoord + "] scan=" + joinNonNull(scanResults));
     }
 
     private String joinNonNull(String[] arr) {
@@ -331,7 +331,7 @@ public class TileSensor extends TileEntity implements IInventory {
                 tag.setTag("display", display);
             }
             stack.setTagCompound(tag);
-            SensorDisplayMod.log.info("[TileSensor@" + xCoord + "," + yCoord + "," + zCoord + "] bindConnector -> dim=" + worldObj.provider.dimensionId + " dirIndex=" + dirIndex + " name=" + name);
+            MinecraftIotMod.log.info("[TileSensor@" + xCoord + "," + yCoord + "," + zCoord + "] bindConnector -> dim=" + worldObj.provider.dimensionId + " dirIndex=" + dirIndex + " name=" + name);
         }
     }
 

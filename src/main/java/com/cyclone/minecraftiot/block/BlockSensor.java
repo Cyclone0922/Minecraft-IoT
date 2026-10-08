@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.block;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileSensor;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -34,7 +34,7 @@ public class BlockSensor extends Block {
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
         if (!world.isRemote) {
             // 打开传感器 GUI
-            player.openGui(SensorDisplayMod.instance, 0, world, x, y, z);
+            player.openGui(MinecraftIotMod.instance, 0, world, x, y, z);
         }
         return true;
     }

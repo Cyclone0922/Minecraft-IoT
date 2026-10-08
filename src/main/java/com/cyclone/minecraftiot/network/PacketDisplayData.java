@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.network;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileDisplay;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
@@ -120,7 +120,7 @@ public class PacketDisplayData implements IMessage {
                             if (pg != null && pg.length > 0) n++;
                         }
                     }
-                    SensorDisplayMod.log.info("[DisplayPacket@client] (" + message.x + "," + message.y + "," + message.z + ") " + n + " page(s)");
+                    MinecraftIotMod.log.info("[DisplayPacket@client] (" + message.x + "," + message.y + "," + message.z + ") " + n + " page(s)");
                 }
             }
             return null;

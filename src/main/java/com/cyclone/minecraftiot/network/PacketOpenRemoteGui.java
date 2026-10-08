@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.network;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.gui.GuiHandler;
 import com.cyclone.minecraftiot.tileentity.TileDisplay;
 import com.cyclone.minecraftiot.tileentity.TileSensor;
@@ -70,7 +70,7 @@ public class PacketOpenRemoteGui implements IMessage {
                 EntityPlayerMP player = ctx.getServerHandler().playerEntity;
                 Container before = player.openContainer;
                 // 打开我们自己的远程终端 GUI（不移动玩家，无距离校验）
-                player.openGui(SensorDisplayMod.MODID, GuiHandler.GUI_REMOTE,
+                player.openGui(MinecraftIotMod.MODID, GuiHandler.GUI_REMOTE,
                         target.getWorldObj(), target.xCoord, target.yCoord, target.zCoord);
                 Container after = player.openContainer;
                 if (after != before) {

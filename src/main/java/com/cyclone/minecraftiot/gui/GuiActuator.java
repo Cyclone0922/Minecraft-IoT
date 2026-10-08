@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.gui;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.network.PacketActuatorConfig;
 import com.cyclone.minecraftiot.tileentity.TileActuator;
 import net.minecraft.client.gui.GuiButton;
@@ -128,7 +128,7 @@ public class GuiActuator extends GuiContainer {
             String outExpr = outField.getText();
             int rs = tile.getRedstoneLevel(selectedSide);
             int outDir = tile.getSignalDir(selectedSide);
-            SensorDisplayMod.network.sendToServer(
+            MinecraftIotMod.network.sendToServer(
                     new PacketActuatorConfig(tile.xCoord, tile.yCoord, tile.zCoord,
                             selectedSide, expr, rs, outExpr, outDir));
         }

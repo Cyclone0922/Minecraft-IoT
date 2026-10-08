@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.block;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileActuator;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -38,7 +38,7 @@ public class BlockActuator extends Block {
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player,
                                      int side, float hitX, float hitY, float hitZ) {
         if (!world.isRemote) {
-            player.openGui(SensorDisplayMod.instance, 3, world, x, y, z); // GUI_ACTUATOR=3
+            player.openGui(MinecraftIotMod.instance, 3, world, x, y, z); // GUI_ACTUATOR=3
         }
         return true;
     }

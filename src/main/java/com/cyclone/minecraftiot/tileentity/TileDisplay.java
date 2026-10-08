@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.tileentity;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.item.ItemConnector;
 import com.cyclone.minecraftiot.network.PacketDisplayData;
 import com.cyclone.minecraftiot.util.ConnectorConfig;
@@ -210,10 +210,10 @@ public class TileDisplay extends TileEntity implements IInventory {
         if (worldObj == null || worldObj.isRemote) return;
         PacketDisplayData packet = new PacketDisplayData(xCoord, yCoord, zCoord, pages,
                 fontSize, alignMode, textRot, displayMode, overflowMode, columns);
-        SensorDisplayMod.network.sendToDimension(packet, worldObj.provider.dimensionId);
+        MinecraftIotMod.network.sendToDimension(packet, worldObj.provider.dimensionId);
         int n = 0;
         for (int i = 0; i < MAX_CARDS; i++) if (pages[i] != null && pages[i].length > 0) n++;
-        SensorDisplayMod.log.info("[TileDisplay@" + xCoord + "," + yCoord + "," + zCoord + "] pushed " + n + " page(s)");
+        MinecraftIotMod.log.info("[TileDisplay@" + xCoord + "," + yCoord + "," + zCoord + "] pushed " + n + " page(s)");
     }
 
     /** 服务端：某张卡槽位内容变化后，重算数据并推送 */

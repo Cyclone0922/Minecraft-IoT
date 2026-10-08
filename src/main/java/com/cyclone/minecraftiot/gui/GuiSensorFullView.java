@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.gui;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileSensor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
@@ -47,7 +47,7 @@ public class GuiSensorFullView extends GuiScreen {
 
     private void backToSensorGui() {
         if (sensor != null && sensor.getWorldObj() != null) {
-            Minecraft.getMinecraft().thePlayer.openGui(SensorDisplayMod.instance, GuiHandler.GUI_SENSOR,
+            Minecraft.getMinecraft().thePlayer.openGui(MinecraftIotMod.instance, GuiHandler.GUI_SENSOR,
                     sensor.getWorldObj(), sensor.xCoord, sensor.yCoord, sensor.zCoord);
         } else {
             Minecraft.getMinecraft().displayGuiScreen(null);

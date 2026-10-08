@@ -1,6 +1,6 @@
 package com.cyclone.minecraftiot.gui;
 
-import com.cyclone.minecraftiot.SensorDisplayMod;
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.item.ItemConnector;
 import com.cyclone.minecraftiot.network.PacketWorkbenchAction;
 import com.cyclone.minecraftiot.network.PacketWorkbenchRequest;
@@ -96,7 +96,7 @@ public class GuiConnectorWorkbench extends GuiContainer {
     }
 
     private void requestData() {
-        SensorDisplayMod.network.sendToServer(new PacketWorkbenchRequest(
+        MinecraftIotMod.network.sendToServer(new PacketWorkbenchRequest(
                 workbench.xCoord, workbench.yCoord, workbench.zCoord));
     }
 
@@ -105,7 +105,7 @@ public class GuiConnectorWorkbench extends GuiContainer {
     }
 
     private void sendAction(int action, String text) {
-        SensorDisplayMod.network.sendToServer(new PacketWorkbenchAction(
+        MinecraftIotMod.network.sendToServer(new PacketWorkbenchAction(
                 workbench.xCoord, workbench.yCoord, workbench.zCoord, action, text));
         status = "\u5df2\u53d1\u9001\u64cd\u4f5c...";
         statusTimer = 100;
