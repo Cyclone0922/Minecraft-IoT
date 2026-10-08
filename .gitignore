@@ -40,3 +40,6 @@ build_log.txt
 gt_launch_log*.txt
 GradleStart.java
 GradleStartServer.java
+
+# 个人开发日记（不提交到仓库）
+/开发日记.txt
