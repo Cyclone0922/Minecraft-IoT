@@ -1,0 +1,10 @@
+tile.sensor.name=传感器
+tile.display.name=显示屏
+tile.actuator.name=执行器
+tile.router.name=路由器
+tile.connector_workbench.name=连接器工作台
+tile.signal_bus.name=信号总线
+item.connector.name=连接器
+item.skill_redstone.name=红石技能插件
+container.actuator=执行器
+container.connector_workbench=连接器工作台

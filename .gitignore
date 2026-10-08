@@ -1,0 +1,42 @@
+# ===== Forge/MCP 反编译源码与游戏资源（版权内容，不公开分享） =====
+/net/
+/cpw/
+/org/
+/edu/
+/com/
+/assets/
+/assets.rar
+/META-INF/
+
+# ===== 运行目录（存档、mods、配置、日志、资源包） =====
+/run/
+/saves/
+/logs/
+/mods/
+/config/
+/resourcepacks/
+/options.txt
+/usernamecache.json
+
+# ===== 第三方反混淆 mod jar（版权内容，不公开分享） =====
+/libs_deobf/
+/libs_obf/
+
+# ===== Gradle / 构建产物 =====
+/build/
+/.gradle/
+*.class
+
+# ===== IDE 文件 =====
+/.idea/
+*.iml
+*.ipr
+*.iws
+/eclipse/
+
+# ===== 日志与临时文件 =====
+*_launch_log*.txt
+build_log.txt
+gt_launch_log*.txt
+GradleStart.java
+GradleStartServer.java

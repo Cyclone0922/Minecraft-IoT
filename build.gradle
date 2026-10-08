@@ -1,0 +1,145 @@
+buildscript {
+    repositories {
+        maven {
+            name = "forge"
+            url = "https://maven.minecraftforge.net/"
+        }
+        // 国内访问 Maven Central 常超时，优先走阿里云镜像
+        maven {
+            name = "aliyun"
+            url = "https://maven.aliyun.com/repository/public"
+        }
+        mavenCentral()
+    }
+    dependencies {
+        classpath ('com.anatawa12.forge:ForgeGradle:1.2-1.1.+') {
+            changing = true
+        }
+    }
+}
+
+// 确保所有项目使用同样的仓库
+allprojects {
+    repositories {
+        maven {
+            name = "forge"
+            url = "https://maven.minecraftforge.net/"
+        }
+        // 国内访问 Maven Central 常超时，优先走阿里云镜像
+        maven {
+            name = "aliyun"
+            url = "https://maven.aliyun.com/repository/public"
+        }
+        // Minecraft 老版运行时库（paulscode 等）只存放在 Mojang 官方仓库
+        maven {
+            name = "minecraftLibraries"
+            url = "https://libraries.minecraft.net/"
+        }
+        mavenCentral()
+    }
+    tasks.withType(JavaCompile) {
+        options.encoding = 'UTF-8'   // 强制UTF-8编码
+    }
+}
+// 旧版 Forge dev.json 把 scala-parser-combinators/xml/swing 写成了 org.scala-lang 组，
+// 但该组已从 Maven Central 下架；实际坐标位于 org.scala-lang.modules 组，这里做依赖替换。
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        def g = details.requested.group
+        def n = details.requested.name
+        if (g == 'org.scala-lang' && ['scala-parser-combinators_2.11', 'scala-xml_2.11', 'scala-swing_2.11'].contains(n)) {
+            details.useTarget group: 'org.scala-lang.modules', name: n, version: details.requested.version
+        }
+    }
+}
+apply plugin: 'forge'
+
+version = "1.0"
+group= "com.yourname.modid" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
+archivesBaseName = "modid"
+
+minecraft {
+    version = "1.7.10-10.13.4.1614-1.7.10"
+}
+
+dependencies {
+    // you may put jars on which you depend on in ./libs
+    // or you may define them like so..
+    //compile "some.group:artifact:version:classifier"
+    //compile "some.group:artifact:version"
+
+    // 科技 MOD（CoFH 系列）dev 测试用：反混淆(SRG->MCP)后的 jar 挂在运行 classpath，
+    // 由 FML 从 classpath 发现加载（不依赖 run/mods 目录）。
+    compile files(
+        'libs_deobf/CoFHCore-[1.7.10]3.1.4-329-deobf.jar',
+        'libs_deobf/ThermalFoundation-[1.7.10]1.2.6-118-deobf.jar',
+        'libs_deobf/ThermalExpansion-[1.7.10]4.1.5-248-deobf.jar',
+        // NEI + CodeChickenLib + CodeChickenCore（1.7.10 原版稳定版，反混淆后挂 classpath）
+        'libs_deobf/CodeChickenLib-1.7.10-1.1.3.140-deobf.jar',
+        'libs_deobf/CodeChickenCore-1.7.10-1.0.4.35-deobf.jar',
+        'libs_deobf/NotEnoughItems-1.7.10-1.0.4.94-deobf.jar',
+        // 工业2实验版（IC2 2.2.828-experimental，官方版，无额外依赖）
+        'libs_deobf/industrialcraft-2-2.2.828a-experimental-deobf.jar',
+        // Railcraft 9.12.2.1（1.7.10 原版，反混淆后挂 classpath）
+        'libs_deobf/Railcraft-9.12.2.1-deobf.jar',
+        // BuildCraft 7.1.23（1.7.10 原版，反混淆后挂 classpath）
+        'libs_deobf/buildcraft-7.1.23-deobf.jar',
+        // GregTech 5.09.31（SpecialSource 按 srg-mcp 反混淆后挂 classpath）
+        'libs_deobf/gregtech-5.09.31-deobf.jar',
+        // 辅助：Waila + Wawla + NotEnoughCharacters（反混淆后挂 classpath）
+        'libs_deobf/Waila-1.5.9_1.7.10-deobf.jar',
+        'libs_deobf/Wawla-1.1.1_1.7.10-deobf.jar',
+        'libs_deobf/NotEnoughCharacters-1.7.10-1.0-deobf.jar'
+    )
+
+
+    // real examples
+    //compile 'com.mod-buildcraft:buildcraft:6.0.8:dev'  // adds buildcraft to the dev env
+    //compile 'com.googlecode.efficient-java-matrix-library:ejml:0.24' // adds ejml to the dev env
+
+    // for more info...
+    // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
+    // http://www.gradle.org/docs/current/userguide/dependency_management.html
+
+}
+
+configurations.all {
+    exclude group: 'Azanor'
+}
+
+processResources
+{
+    // this will ensure that this task is redone when the versions change.
+    inputs.property "version", project.version
+    inputs.property "mcversion", project.minecraft.version
+
+    // replace stuff in mcmod.info, nothing else
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+                
+        // replace version and mcversion
+        expand 'version':project.version, 'mcversion':project.minecraft.version
+    }
+        
+    // copy everything else, thats not the mcmod.info
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mcmod.info'
+    }
+}
+
+
+// 跳过 assets 下载，因为已手动放置
+tasks.getByName("getAssets").enabled = false
+
+// ============ release 产物 ============
+// 本 ForgeGradle 分支的 build 不自动执行 reobf；统一用 release 任务产出可发布 jar：
+//   gradlew release   → reobf（MCP名→SRG名）+ 复制到 build/release/
+task releaseJar(type: Copy) {
+    dependsOn 'reobf'
+    from 'build/libs'
+    include 'modid-1.0.jar'
+    into 'build/release'
+}
+task release(dependsOn: 'releaseJar') {
+    description = '产出 release 版 jar 到 build/release/'
+}

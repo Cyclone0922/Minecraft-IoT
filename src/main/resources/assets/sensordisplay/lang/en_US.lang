@@ -1,0 +1,10 @@
+tile.sensor.name=Sensor
+tile.display.name=Display
+tile.actuator.name=Actuator
+tile.router.name=Router
+tile.connector_workbench.name=Connector Workbench
+tile.signal_bus.name=Signal Bus
+item.connector.name=Connector
+item.skill_redstone.name=Redstone Skill
+container.actuator=Actuator
+container.connector_workbench=Connector Workbench
