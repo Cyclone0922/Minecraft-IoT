@@ -66,6 +66,8 @@ public class GuiConnectorWorkbench extends GuiContainer {
     @Override
     public void initGui() {
         super.initGui();
+        // 开启按键重复：按住 Backspace/Delete/方向键可连续删除/移动（原版 Minecraft 默认关闭重复事件）
+        org.lwjgl.input.Keyboard.enableRepeatEvents(true);
         this.nameField = new GuiTextField(this.fontRendererObj, MODAL_FIELD_X, MODAL_FIELD_Y, MODAL_FIELD_W, MODAL_FIELD_H);
         this.nameField.setMaxStringLength(60);
         requestData();
@@ -254,7 +256,7 @@ public class GuiConnectorWorkbench extends GuiContainer {
         super.keyTyped(typedChar, keyCode);
     }
 
-    /** 打开表达式编辑器：需要服务端下发的目标 NBT */
+    /** 打开表达式编辑器：需要服务端下发的目标 NBT；把当前容器传入，保存后返回时复用（保留服务端窗口号） */
     private void openConfigEditor() {
         if (!workbench.clientHasCard()) {
             status = "\u8bf7\u5148\u63d2\u5165\u8fde\u63a5\u5668";
@@ -267,7 +269,22 @@ public class GuiConnectorWorkbench extends GuiContainer {
             return;
         }
         net.minecraft.client.Minecraft.getMinecraft().displayGuiScreen(
-                new GuiCardConfigEditor(workbench, workbench.clientNbt(), workbench.clientTargetClass(), workbench.clientExpr()));
+                new GuiCardConfigEditor(workbench, workbench.clientNbt(), workbench.clientTargetClass(), workbench.clientExpr(), container));
+    }
+
+    /**
+     * 窗口号防御：若本 GUI 容器与服务端同步对象（thePlayer.openContainer）窗口号分叉
+     * （例如经 displayGuiScreen 重开 GUI 时容器被重建、windowId 归零），
+     * 点击包会因窗口号不匹配被服务端丢弃，表现为"卡拿不出来"。
+     * 这里在每次点击前把窗口号对齐到 thePlayer.openContainer，保证与服务端一致。
+     */
+    @Override
+    protected void handleMouseClick(Slot slot, int slotId, int clickedButton, int clickType) {
+        if (mc.thePlayer != null && mc.thePlayer.openContainer != null
+                && this.inventorySlots.windowId != mc.thePlayer.openContainer.windowId) {
+            this.inventorySlots.windowId = mc.thePlayer.openContainer.windowId;
+        }
+        super.handleMouseClick(slot, slotId, clickedButton, clickType);
     }
 
     /** 打开重命名弹窗：预填默认命名方案（已绑定→绑定卡，否则连接器） */

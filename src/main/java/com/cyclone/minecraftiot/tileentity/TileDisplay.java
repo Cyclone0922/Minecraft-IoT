@@ -257,10 +257,10 @@ public class TileDisplay extends TileEntity implements IInventory {
 
     @Override
     public ItemStack getStackInSlotOnClosing(int slot) {
+        // 1.7.10 该回调不应清空槽位：置 null 会让卡在部分容器回调路径下意外消失
+        // （表现为打开 GUI 时卡"拿不出来"）。取走卡只应走 decrStackSize/setInventorySlotContents。
         if (slot < 0 || slot >= MAX_CARDS) return null;
-        ItemStack stack = cards[slot];
-        cards[slot] = null;
-        return stack;
+        return cards[slot];
     }
 
     @Override

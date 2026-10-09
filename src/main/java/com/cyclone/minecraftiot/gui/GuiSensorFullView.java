@@ -18,6 +18,7 @@ import java.util.List;
 public class GuiSensorFullView extends GuiScreen {
 
     private final TileSensor sensor;
+    private final ContainerSensor container; // 进入浮窗前打开的传感器容器，返回时复用（保留服务端窗口号）
     private int scroll = 0;
     private static final int LEFT = 16, TOP = 30, LINE_H = 9, SCROLL_STEP = 12;
     private static final int[] DIR_NAMES = {2, 1, 4, 5, 0, 3};
@@ -28,8 +29,9 @@ public class GuiSensorFullView extends GuiScreen {
     private String[] lastRawRef;              // 上次排版时的 rawResults 引用
     private final List<List<String>> wrappedCache = new ArrayList<List<String>>();
 
-    public GuiSensorFullView(TileSensor sensor) {
+    public GuiSensorFullView(TileSensor sensor, ContainerSensor container) {
         this.sensor = sensor;
+        this.container = container;
     }
 
     @Override
@@ -46,6 +48,13 @@ public class GuiSensorFullView extends GuiScreen {
     }
 
     private void backToSensorGui() {
+        // 优先复用进入浮层时的传感器容器：其 windowId 由服务端 OpenGui 包分配且与服务端一致；
+        // 若重新 new 容器 / thePlayer.openGui，客户端窗口号归零，点击会被服务端按窗口号丢弃
+        // （表现为第一次打开卡"拿不出来"，重开才好）。
+        if (container != null) {
+            Minecraft.getMinecraft().displayGuiScreen(new GuiSensor(container));
+            return;
+        }
         if (sensor != null && sensor.getWorldObj() != null) {
             Minecraft.getMinecraft().thePlayer.openGui(MinecraftIotMod.instance, GuiHandler.GUI_SENSOR,
                     sensor.getWorldObj(), sensor.xCoord, sensor.yCoord, sensor.zCoord);

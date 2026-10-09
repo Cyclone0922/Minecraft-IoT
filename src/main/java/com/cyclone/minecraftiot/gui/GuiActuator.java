@@ -7,6 +7,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.inventory.Container;
+import net.minecraft.inventory.Slot;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.util.ForgeDirection;
 
@@ -58,6 +59,8 @@ public class GuiActuator extends GuiContainer {
     @Override
     public void initGui() {
         super.initGui();
+        // 开启按键重复：按住 Backspace/Delete/方向键可连续删除/移动（原版 Minecraft 默认关闭重复事件）
+        org.lwjgl.input.Keyboard.enableRepeatEvents(true);
         // 输入框必须用相对坐标，否则绘制时会再叠加 translate 导致错位
         this.condField = new GuiTextField(this.fontRendererObj, COND_X, COND_Y, COND_W, COND_H);
         this.condField.setMaxStringLength(500);
@@ -191,5 +194,20 @@ public class GuiActuator extends GuiContainer {
         super.updateScreen();
         condField.updateCursorCounter();
         outField.updateCursorCounter();
+    }
+
+    /**
+     * 窗口号防御：若本 GUI 容器与服务端同步对象（thePlayer.openContainer）窗口号分叉
+     * （例如经 displayGuiScreen 重开 GUI 时容器被重建、windowId 归零），
+     * 点击包会因窗口号不匹配被服务端丢弃，表现为"卡拿不出来"。
+     * 这里在每次点击前把窗口号对齐到 thePlayer.openContainer，保证与服务端一致。
+     */
+    @Override
+    protected void handleMouseClick(Slot slot, int slotId, int clickedButton, int clickType) {
+        if (mc.thePlayer != null && mc.thePlayer.openContainer != null
+                && this.inventorySlots.windowId != mc.thePlayer.openContainer.windowId) {
+            this.inventorySlots.windowId = mc.thePlayer.openContainer.windowId;
+        }
+        super.handleMouseClick(slot, slotId, clickedButton, clickType);
     }
 }

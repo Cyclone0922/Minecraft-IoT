@@ -52,13 +52,30 @@ public class DisplayRenderer extends TileEntitySpecialRenderer {
         if (masterPos.equals(te.xCoord, te.yCoord, te.zCoord) && master != null && !active.isEmpty()) {
             int color = structValid ? 0xFF00FF00 : 0xFFFF0000;
             int half = (int) Math.round(1.0f / SCALE) / 2;
-            // 按主控在组内的 u/v 极值 + 各朝向镜像规则，把灯固定到屏幕对应角点
+            // 主控角（下东南）在屏幕上的期望角点：
+            //   lx：主控落在 u 最大（leftEdge=false）-> 屏幕右（+half）。
+            //       但 Minecraft 渲染方块面时会水平镜像 NORTH 和 EAST 面（见 BlockDisplay.getIcon 注释：
+            //       北面/东面左右对调，南面/西面正常），因此 NORTH/EAST 面上 u 最大 -> 屏幕左（-half）。
+            //   ly：垂直面(2/3/4/5) rotate 绕 Y，y 不变 -> 主控在下(v 最小) -> 屏幕下（+half）
+            //       UP(1) rotate -90X：世界南(z+) -> 屏幕下方 -> 主控(南侧) -> +half
+            //       DOWN(0) rotate +90X：世界南(z+) -> 屏幕上方 -> 主控(南侧) -> -half
             int mu = (gi.uAxis == 0) ? masterPos.x : (gi.uAxis == 1 ? masterPos.y : masterPos.z);
             int mv = (gi.vAxis == 0) ? masterPos.x : (gi.vAxis == 1 ? masterPos.y : masterPos.z);
             boolean leftEdge = mu == gi.minU;   // 靠组平面 u 最小侧
-            boolean topEdge  = mv == gi.maxV;   // 靠组平面 v 最大侧(屏幕上方)
-            int lx = (meta == 2) ? (leftEdge ? half : -half) : (leftEdge ? -half : half); // NORTH 左右镜像
-            int ly = (meta == 1) ? (topEdge ? half : -half) : (topEdge ? -half : half);   // UP 上下镜像
+            boolean topEdge  = mv == gi.maxV;   // 靠组平面 v 最大侧
+            int lx = (meta == 2 || meta == 5) ? (leftEdge ? half : -half) : (leftEdge ? -half : half); // NORTH/EAST 贴图镜像 -> 屏幕左右对调
+            // ly（主控在下东南）：
+            //   DOWN(0) rotate +90X：世界南(z+) -> 屏幕上方 -> 主控(南侧) -> -half
+            //   UP(1)   rotate -90X：世界南(z+) -> 屏幕下方 -> 主控(南侧) -> +half
+            //   垂直面(2/3/4/5) rotate 绕 Y，y 不变：主控在 y 最小 -> 屏幕下方 -> +half
+            int ly;
+            if (meta == 0) {
+                ly = topEdge ? -half : half;
+            } else if (meta == 1) {
+                ly = topEdge ? half : -half;
+            } else {
+                ly = topEdge ? -half : half;
+            }
             drawPixel(x, y, z, meta, color, lx, ly);
         }
 
@@ -81,7 +98,9 @@ public class DisplayRenderer extends TileEntitySpecialRenderer {
         GL11.glTranslated(x + 0.5 + dx, y + 0.5 + dy, z + 0.5 + dz);
         rotateForDirection(dirFromMeta(meta));
         GL11.glTranslated(0, 0, 0.5);
-        GL11.glScalef(SCALE, -SCALE, -SCALE);
+        // z 缩放大（+SCALE*4）：文字平面推到方块面外侧 0.04（指示灯 0.02 已证不闪），
+        // 与方块面深度彻底分离，避免深度冲突（z-fighting）导致的文字忽闪/时隐时现
+        GL11.glScalef(SCALE, -SCALE, SCALE * 4);
         drawText(master, active, gi, world.getTotalWorldTime());
         GL11.glPopMatrix();
     }
@@ -134,6 +153,9 @@ public class DisplayRenderer extends TileEntitySpecialRenderer {
         int wrapLimit = Math.max(1, (int) (colInner / fs));
 
         GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_CULL_FACE); // 文字 QUAD 法线在部分朝向观察者、部分背对（受面旋转影响），禁 cull 防止忽闪/完全不可见
+        GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+        GL11.glPolygonOffset(-1.0f, -1.0f); // 深度向观察者偏移，与方块面深度分离，消除 z-fighting
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
@@ -173,7 +195,9 @@ public class DisplayRenderer extends TileEntitySpecialRenderer {
 
         GL11.glPopMatrix();
         GL11.glDisable(GL11.GL_BLEND);
+        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
         GL11.glEnable(GL11.GL_LIGHTING);
+        GL11.glEnable(GL11.GL_CULL_FACE);
     }
 
     /** 溢出行为：截断 / 分页清屏 / 逐行滚动 */

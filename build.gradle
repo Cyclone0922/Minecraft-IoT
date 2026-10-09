@@ -54,7 +54,7 @@ configurations.all {
 }
 apply plugin: 'forge'
 
-version = "1.0"
+version = mod_version // 语义化版本，统一在 gradle.properties 的 mod_version 维护
 group= "com.cyclone.minecraftiot" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
 archivesBaseName = "modid"
 
@@ -137,7 +137,7 @@ tasks.getByName("getAssets").enabled = false
 task releaseJar(type: Copy) {
     dependsOn 'reobf'
     from 'build/libs'
-    include 'modid-1.0.jar'
+    include "${archivesBaseName}-${project.version}.jar"
     into 'build/release'
 }
 task release(dependsOn: 'releaseJar') {

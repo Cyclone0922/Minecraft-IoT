@@ -8,6 +8,7 @@ import com.cyclone.minecraftiot.tileentity.TileDisplay;
 import com.cyclone.minecraftiot.util.DisplayGroupUtil;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.inventory.Container;
+import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
@@ -292,6 +293,21 @@ public class GuiDisplay extends GuiContainer {
             }
         }
         super.mouseClicked(mouseX, mouseY, mouseButton);
+    }
+
+    /**
+     * 窗口号防御：若本 GUI 容器与服务端同步对象（thePlayer.openContainer）窗口号分叉
+     * （例如经 displayGuiScreen 重开 GUI 时容器被重建、windowId 归零），
+     * 点击包会因窗口号不匹配被服务端丢弃，表现为"卡拿不出来"。
+     * 这里在每次点击前把窗口号对齐到 thePlayer.openContainer，保证与服务端一致。
+     */
+    @Override
+    protected void handleMouseClick(Slot slot, int slotId, int clickedButton, int clickType) {
+        if (mc.thePlayer != null && mc.thePlayer.openContainer != null
+                && this.inventorySlots.windowId != mc.thePlayer.openContainer.windowId) {
+            this.inventorySlots.windowId = mc.thePlayer.openContainer.windowId;
+        }
+        super.handleMouseClick(slot, slotId, clickedButton, clickType);
     }
 
     /** 应用设置：写回客户端 tile（立即渲染）+ 发送服务端持久化并回推 */

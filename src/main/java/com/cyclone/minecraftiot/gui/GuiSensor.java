@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.inventory.Container;
+import net.minecraft.inventory.Slot;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 
@@ -74,6 +75,8 @@ public class GuiSensor extends GuiContainer {
     @Override
     public void initGui() {
         super.initGui();
+        // 开启按键重复：按住 Backspace/Delete/方向键可连续删除/移动（原版 Minecraft 默认关闭重复事件）
+        org.lwjgl.input.Keyboard.enableRepeatEvents(true);
         // fontRendererObj 只有到 initGui 阶段才就绪，必须在这里创建输入框（构造时用会 NPE）
         this.noteField = new GuiTextField(this.fontRendererObj, NOTE_FIELD_X, NOTE_Y, NOTE_FIELD_W, NOTE_H);
         this.noteField.setMaxStringLength(300);
@@ -308,10 +311,25 @@ public class GuiSensor extends GuiContainer {
         return mx >= x && mx < x + w && my >= y && my < y + h;
     }
 
-    /** 打开全屏原始NBT浮层（实时刷新，滚轮滚动） */
+    /** 打开全屏原始NBT浮层（实时刷新，滚轮滚动）；传入当前容器以便返回时复用（保留服务端窗口号） */
     private void openFullView() {
         if (tileSensor == null) return;
-        Minecraft.getMinecraft().displayGuiScreen(new GuiSensorFullView(tileSensor));
+        Minecraft.getMinecraft().displayGuiScreen(new GuiSensorFullView(tileSensor, (ContainerSensor) this.inventorySlots));
+    }
+
+    /**
+     * 窗口号防御：若本 GUI 容器与服务端同步对象（thePlayer.openContainer）窗口号分叉
+     * （例如经 displayGuiScreen 重开 GUI 时容器被重建、windowId 归零），
+     * 点击包会因窗口号不匹配被服务端丢弃，表现为"卡拿不出来"。
+     * 这里在每次点击前把窗口号对齐到 thePlayer.openContainer，保证与服务端一致。
+     */
+    @Override
+    protected void handleMouseClick(Slot slot, int slotId, int clickedButton, int clickType) {
+        if (mc.thePlayer != null && mc.thePlayer.openContainer != null
+                && this.inventorySlots.windowId != mc.thePlayer.openContainer.windowId) {
+            this.inventorySlots.windowId = mc.thePlayer.openContainer.windowId;
+        }
+        super.handleMouseClick(slot, slotId, clickedButton, clickType);
     }
 
     /** 按字体实际像素宽度把一行文本拆成多行 */

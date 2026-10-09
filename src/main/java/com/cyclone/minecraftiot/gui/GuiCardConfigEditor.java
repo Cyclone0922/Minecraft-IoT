@@ -30,6 +30,7 @@ public class GuiCardConfigEditor extends GuiScreen {
     private final NBTTagCompound nbt;
     private final String targetClass;
     private final String initialExpr;
+    private final ContainerConnectorWorkbench container; // 进入编辑器前的工作台容器；返回时复用（保留服务端窗口号）
 
     private List<NbtVariableUtil.Var> vars = new ArrayList<NbtVariableUtil.Var>();
     private boolean[] checked;
@@ -41,16 +42,19 @@ public class GuiCardConfigEditor extends GuiScreen {
     private static final int VAR_ROW_H = 11;
     private static final int VAR_TOP = 40;
 
-    public GuiCardConfigEditor(TileConnectorWorkbench workbench, NBTTagCompound nbt, String targetClass, String initialExpr) {
+    public GuiCardConfigEditor(TileConnectorWorkbench workbench, NBTTagCompound nbt, String targetClass, String initialExpr, ContainerConnectorWorkbench container) {
         this.workbench = workbench;
         this.nbt = nbt;
         this.targetClass = targetClass == null ? "" : targetClass;
         this.initialExpr = initialExpr == null ? "" : initialExpr;
+        this.container = container;
     }
 
     @Override
     public void initGui() {
         super.initGui();
+        // 开启按键重复：按住 Backspace/Delete/方向键可连续删除/移动（原版 Minecraft 默认关闭重复事件）
+        org.lwjgl.input.Keyboard.enableRepeatEvents(true);
         List<NbtVariableUtil.Var> all = NbtVariableUtil.flatten(nbt);
         if (all != null) {
             // 只保留标量可引用变量（路径 + 值）
@@ -203,14 +207,17 @@ public class GuiCardConfigEditor extends GuiScreen {
     }
 
     private void close() {
-        // 重新走 GuiHandler 打开工作台 GUI：服务端重建 Container，客户端槽位同步链路保持一致。
-        // 不能在这里 new ContainerConnectorWorkbench —— 客户端新建的 Container 与
-        // openContainer（服务端同步对象）分叉：拖出卡后服务端槽位已扣、但客户端 GUI 仍
-        // 从本地 tile 读到卡，退出/重开 GUI 时表现为"卡自动回到工作台"。
-        Minecraft.getMinecraft().thePlayer.openGui(MinecraftIotMod.instance,
-                com.cyclone.minecraftiot.gui.GuiHandler.GUI_WORKBENCH,
-                Minecraft.getMinecraft().theWorld,
-                workbench.xCoord, workbench.yCoord, workbench.zCoord);
+        // 复用进入编辑器时的工作台容器实例：其 windowId 由服务端 OpenGui 包分配且与服务端一致。
+        // 若重建容器或重新 thePlayer.openGui，客户端窗口号会归零，点击包会被服务端按窗口号丢弃，
+        // 表现为第一次"卡拿不出来"、重开才好。
+        if (container != null) {
+            Minecraft.getMinecraft().displayGuiScreen(new GuiConnectorWorkbench(container, workbench));
+        } else {
+            Minecraft.getMinecraft().thePlayer.openGui(MinecraftIotMod.instance,
+                    com.cyclone.minecraftiot.gui.GuiHandler.GUI_WORKBENCH,
+                    Minecraft.getMinecraft().theWorld,
+                    workbench.xCoord, workbench.yCoord, workbench.zCoord);
+        }
     }
 
     @Override
