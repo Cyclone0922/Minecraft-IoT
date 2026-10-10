@@ -3,7 +3,6 @@ package com.cyclone.minecraftiot.tileentity;
 import com.cyclone.minecraftiot.item.ItemConnector;
 import com.cyclone.minecraftiot.item.ItemSkill;
 import com.cyclone.minecraftiot.item.ItemSkillRedstone;
-import com.cyclone.minecraftiot.util.ExprBoolean;
 import com.cyclone.minecraftiot.util.MultiblockResolver;
 import com.cyclone.minecraftiot.util.SignalExpr;
 import com.cyclone.minecraftiot.util.SignalValue;
@@ -46,9 +45,8 @@ public class TileActuator extends TileEntity implements IInventory {
     // 六面配置：条件表达式 + 红石强度（0~15）
     private String[] conditions = new String[6];
     private int[] redstoneLevels = new int[6];
-    // 技能0（信号域）：输出表达式（可空）+ 输出方向（默认本面）
+    // 技能0（信号域）：输出表达式（可空）——方向合一模型：输出永远从本面出，无独立输出方向
     private String[] outputExprs = new String[6];
-    private int[] signalDirs = new int[6];
     // 六面当前输出（服务端计算，用于红石查询）
     private int[] currentOutput = new int[6];
 
@@ -66,7 +64,6 @@ public class TileActuator extends TileEntity implements IInventory {
             conditions[i] = "";
             redstoneLevels[i] = 15;
             outputExprs[i] = "";
-            signalDirs[i] = i;
         }
     }
 
@@ -106,18 +103,6 @@ public class TileActuator extends TileEntity implements IInventory {
     public void setOutputExpr(int side, String expr) {
         if (side < 0 || side >= 6) return;
         outputExprs[side] = expr == null ? "" : expr;
-        markDirty();
-        syncToClient();
-    }
-
-    public int getSignalDir(int side) {
-        if (side < 0 || side >= 6) return 0;
-        return signalDirs[side];
-    }
-
-    public void setSignalDir(int side, int dir) {
-        if (side < 0 || side >= 6) return;
-        signalDirs[side] = (dir >= 0 && dir < 6) ? dir : side;
         markDirty();
         syncToClient();
     }
@@ -179,20 +164,20 @@ public class TileActuator extends TileEntity implements IInventory {
         for (int side = 0; side < 6; side++) {
             String cond = getCondition(side);
             if (cond.isEmpty()) continue; // 未配置该面：不输出，保持上次值
-            SignalValue in = getInValue(side);
-            boolean pass = SignalExpr.test(cond, targetNbtCache, in);
+            SignalValue[] ins = buildInValues(side); // 6 面输入（当前面带绑卡远端兜底）
+            boolean pass = SignalExpr.test(cond, targetNbtCache, ins, side);
             SignalValue out = null;
             if (pass) {
                 String outExpr = getOutputExpr(side);
                 if (!outExpr.isEmpty()) {
-                    out = SignalExpr.evaluate(outExpr, targetNbtCache, in);
+                    out = SignalExpr.evaluate(outExpr, targetNbtCache, ins, side);
                 } else {
-                    out = SignalExpr.evaluate(cond, targetNbtCache, in); // 默认输出条件计算值（保留类型）
+                    out = SignalExpr.evaluate(cond, targetNbtCache, ins, side); // 默认输出条件计算值（保留类型）
                 }
             }
-            int outDir = getSignalDir(side);
-            if (!sameValue(outBuffer[outDir], out)) {
-                outBuffer[outDir] = out;
+            // 方向合一：输出永远写到本面缓冲（邻居从对面读）
+            if (!sameValue(outBuffer[side], out)) {
+                outBuffer[side] = out;
                 markDirty();
             }
             if (out != null) lastOut = out;
@@ -226,6 +211,13 @@ public class TileActuator extends TileEntity implements IInventory {
         return remoteInputMain;
     }
 
+    /** 6 面输入快照（供 {inX} 综合引用）；当前面保持 getInValue 的绑卡远端兜底语义 */
+    private SignalValue[] buildInValues(int side) {
+        SignalValue[] arr = inBuffer.clone();
+        if (arr[side] == null) arr[side] = remoteInputMain;
+        return arr;
+    }
+
     private static int oppositeSide(int side) {
         if (side == 0) return 1; // D <-> U
         if (side == 1) return 0;
@@ -249,15 +241,17 @@ public class TileActuator extends TileEntity implements IInventory {
         targetNbtCache = nbt;
         remoteInputMain = nbt != null ? SignalValue.readFromNBT(nbt, "SignalOut") : null;
         // 红石分支（沿用原有逻辑，用同一份 NBT 快照）
+        // 支持 {in}：条件可用 SignalExpr（引用紧贴/总线输入 + 机器 NBT），无需插卡（nbt 可为 null）
+        // 方向合一：红石输出到条件面本面（无独立输出方向）
         boolean changed = false;
         boolean debug = worldObj.getTotalWorldTime() % 200 == 0;
         for (int side = 0; side < 6; side++) {
             int newOut = 0;
             boolean result = false;
-            if (hasRedstoneSkill() && nbt != null) {
+            if (hasRedstoneSkill()) {
                 String cond = getCondition(side);
                 if (!cond.isEmpty()) {
-                    result = ExprBoolean.evaluate(cond, nbt);
+                    result = SignalExpr.test(cond, nbt, buildInValues(side), side);
                     if (result) newOut = redstoneLevels[side];
                 }
             }
@@ -272,6 +266,7 @@ public class TileActuator extends TileEntity implements IInventory {
                         + " Energy=" + (nbt != null ? nbt.getDouble("Energy") : "n/a")
                         + " hasTags=" + (nbt != null ? !nbt.hasNoTags() : "n/a"));
             }
+            // 方向合一：红石从条件面本面输出（无独立输出方向，天然无多面争抢冲突）
             if (currentOutput[side] != newOut) {
                 currentOutput[side] = newOut;
                 changed = true;
@@ -432,7 +427,6 @@ public class TileActuator extends TileEntity implements IInventory {
                 tag.setString("OutExpr" + i, outputExprs[i]);
             }
             tag.setInteger("RS" + i, redstoneLevels[i]);
-            tag.setInteger("OutDir" + i, signalDirs[i]);
         }
     }
 
@@ -441,7 +435,6 @@ public class TileActuator extends TileEntity implements IInventory {
             conditions[i] = tag.hasKey("Cond" + i) ? tag.getString("Cond" + i) : "";
             outputExprs[i] = tag.hasKey("OutExpr" + i) ? tag.getString("OutExpr" + i) : "";
             redstoneLevels[i] = tag.hasKey("RS" + i) ? tag.getInteger("RS" + i) : 15;
-            signalDirs[i] = tag.hasKey("OutDir" + i) ? tag.getInteger("OutDir" + i) : i;
         }
     }
 
@@ -469,7 +462,6 @@ public class TileActuator extends TileEntity implements IInventory {
             }
             tag.setInteger("RS" + i, redstoneLevels[i]);
             tag.setInteger("Out" + i, currentOutput[i]);
-            tag.setInteger("OutDir" + i, signalDirs[i]);
         }
         // 信号主键：供绑卡远端执行器读取最近输出
         if (signalOutCache != null) {
@@ -487,7 +479,6 @@ public class TileActuator extends TileEntity implements IInventory {
             outputExprs[i] = tag.hasKey("OutExpr" + i) ? tag.getString("OutExpr" + i) : "";
             redstoneLevels[i] = tag.hasKey("RS" + i) ? tag.getInteger("RS" + i) : 15;
             currentOutput[i] = tag.hasKey("Out" + i) ? tag.getInteger("Out" + i) : 0;
-            signalDirs[i] = tag.hasKey("OutDir" + i) ? tag.getInteger("OutDir" + i) : i;
         }
         signalOutCache = SignalValue.readFromNBT(tag, "SignalOut");
     }

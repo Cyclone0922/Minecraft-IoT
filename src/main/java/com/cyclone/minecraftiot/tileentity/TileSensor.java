@@ -313,10 +313,14 @@ public class TileSensor extends TileEntity implements IInventory {
     }
 
     // 绑定方法：把放入槽位的 connector 绑定到本传感器坐标 + 选中的方向（只在服务端执行）
-    // dirIndex 对应 VALID_DIRECTIONS 索引 0..5；-1 表示绑定"全部方向"
+    // dirIndex 对应 VALID_DIRECTIONS 索引 0..5。连接器只支持绑定单一方向，非法值（<0 或 >5）直接拒绝。
     // name 为玩家自定义卡名（可为空），非空时写入 display.Name，便于在背包中区分不同绑定卡
     public void bindConnector(ItemStack stack, int dirIndex, String name) {
         if (worldObj == null || worldObj.isRemote) return;
+        if (dirIndex < 0 || dirIndex > 5) {
+            MinecraftIotMod.log.warn("[TileSensor@" + xCoord + "," + yCoord + "," + zCoord + "] bindConnector rejected: dirIndex=" + dirIndex + " (must be 0..5, single direction only)");
+            return;
+        }
         if (stack != null && stack.getItem() instanceof ItemConnector) {
             NBTTagCompound tag = stack.getTagCompound();
             if (tag == null) tag = new NBTTagCompound();

@@ -12,7 +12,8 @@ import net.minecraft.world.World;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 客户端 -> 服务端：在执行器 GUI 保存某面的条件表达式、输出表达式、红石强度和输出方向。
+ * 客户端 -> 服务端：在执行器 GUI 保存某面的条件表达式、输出表达式和红石强度。
+ * 方向合一模型：输出永远从本面出，无输出方向字段。
  */
 public class PacketActuatorConfig implements IMessage {
 
@@ -21,18 +22,16 @@ public class PacketActuatorConfig implements IMessage {
     private String condition;
     private int redstoneLevel;
     private String outputExpr;
-    private int signalDir;
 
     public PacketActuatorConfig() {}
 
     public PacketActuatorConfig(int x, int y, int z, int side, String condition, int redstoneLevel,
-                                String outputExpr, int signalDir) {
+                                String outputExpr) {
         this.x = x; this.y = y; this.z = z;
         this.side = side;
         this.condition = condition == null ? "" : condition;
         this.redstoneLevel = redstoneLevel;
         this.outputExpr = outputExpr == null ? "" : outputExpr;
-        this.signalDir = signalDir;
     }
 
     @Override
@@ -44,7 +43,6 @@ public class PacketActuatorConfig implements IMessage {
         redstoneLevel = buf.readInt();
         int len = buf.readInt();
         condition = buf.readBytes(Math.min(len, 500)).toString(StandardCharsets.UTF_8);
-        signalDir = buf.readInt();
         int len2 = buf.readInt();
         outputExpr = buf.readBytes(Math.min(len2, 500)).toString(StandardCharsets.UTF_8);
     }
@@ -57,7 +55,6 @@ public class PacketActuatorConfig implements IMessage {
         byte[] b = condition.getBytes(StandardCharsets.UTF_8);
         buf.writeInt(b.length);
         buf.writeBytes(b);
-        buf.writeInt(signalDir);
         byte[] b2 = outputExpr.getBytes(StandardCharsets.UTF_8);
         buf.writeInt(b2.length);
         buf.writeBytes(b2);
@@ -74,7 +71,6 @@ public class PacketActuatorConfig implements IMessage {
                     act.setCondition(msg.side, msg.condition);
                     act.setRedstoneLevel(msg.side, msg.redstoneLevel);
                     act.setOutputExpr(msg.side, msg.outputExpr);
-                    act.setSignalDir(msg.side, msg.signalDir);
                 }
             }
             return null;

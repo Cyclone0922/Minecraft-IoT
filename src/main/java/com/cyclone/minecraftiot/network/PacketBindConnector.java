@@ -13,7 +13,7 @@ import net.minecraft.world.World;
 /**
  * 客户端 -> 服务端：用户在传感器 GUI 点击"写入绑定卡"按钮，
  * 让服务端把槽位内的 connector 绑定到传感器坐标 + 当前选中的方向索引。
- * dirIndex 为 -1 表示绑定"全部方向"；name 为玩家在弹出的命名框中输入的自定义卡名（可为空）。
+ * dirIndex 为 0..5（VALID_DIRECTIONS 索引），连接器只支持绑定单一方向；name 为玩家在弹出的命名框中输入的自定义卡名（可为空）。
  */
 public class PacketBindConnector implements IMessage {
     private int x, y, z;

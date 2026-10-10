@@ -12,10 +12,10 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.util.ForgeDirection;
 
 /**
- * 执行器 GUI。
+ * 执行器 GUI（方向合一模型）。
  * 左上：绑定卡槽 + 技能插件槽。
- * 右上：方向按钮切换当前编辑面。
- * 中部：条件表达式输入框 + 输出表达式输入框 + 输出方向按钮组 + 红石强度调节 + 保存按钮。
+ * 右上：方向按钮切换当前编辑面——当前面 = 输出面，条件/输出表达式/红石强度都挂在本面。
+ * 中部：条件表达式输入框 + 输出表达式输入框 + 红石强度调节 + 保存按钮。
  * 底部：玩家背包。
  */
 public class GuiActuator extends GuiContainer {
@@ -35,9 +35,6 @@ public class GuiActuator extends GuiContainer {
     private static final int COND_X = 8, COND_Y = 70, COND_W = 160, COND_H = 14;
     // 输出表达式输入框
     private static final int OUT_X = 8, OUT_Y = 94, OUT_W = 160, OUT_H = 14;
-    // 输出方向按钮组
-    private static final int OUTDIR_Y = 112;
-    private static final int[] OUTDIR_X = {60, 78, 96, 114, 132, 150};
     // 红石强度
     private static final int RS_LABEL_X = 8, RS_Y = 132;
     private static final int RS_MINUS_X = 50, RS_PLUS_X = 90, RS_BTN_W = 20, RS_BTN_H = 14;
@@ -78,11 +75,6 @@ public class GuiActuator extends GuiContainer {
         this.buttonList.add(new GuiButton(11, guiLeft + RS_PLUS_X, guiTop + RS_Y, RS_BTN_W, RS_BTN_H, "+"));
         // 保存
         this.buttonList.add(new GuiButton(12, guiLeft + SAVE_X, guiTop + SAVE_Y, SAVE_W, SAVE_H, "保存"));
-        // 输出方向按钮组（N/U/W/E/D/S，点击设置该面输出方向）
-        for (int i = 0; i < 6; i++) {
-            this.buttonList.add(new GuiButton(20 + i, guiLeft + OUTDIR_X[i], guiTop + OUTDIR_Y, 16, 12, DIR_LABEL[i]));
-        }
-        refreshOutDirButtons();
     }
 
     /** 把指定面的配置加载到输入框 */
@@ -91,29 +83,12 @@ public class GuiActuator extends GuiContainer {
         if (outField != null) outField.setText(tile.getOutputExpr(side));
     }
 
-    /** 刷新输出方向按钮高亮：当前选中的方向蓝色，其余灰色 */
-    private void refreshOutDirButtons() {
-        int cur = tile.getSignalDir(selectedSide);
-        for (int i = 0; i < 6; i++) {
-            int idx = DIR_IDX[i];
-            GuiButton b = null;
-            for (Object o : this.buttonList) {
-                GuiButton g = (GuiButton) o;
-                if (g.id == 20 + i) { b = g; break; }
-            }
-            if (b != null) {
-                b.displayString = (idx == cur ? "\u00a7b" : "\u00a78") + DIR_LABEL[i];
-            }
-        }
-    }
-
     @Override
     protected void actionPerformed(GuiButton button) {
         if (button.id >= 0 && button.id < 6) {
-            // 切换方向
+            // 切换方向（方向合一：当前面 = 输出面，条件/动作都挂在本面）
             selectedSide = DIR_IDX[button.id];
             loadSideConfig(selectedSide);
-            refreshOutDirButtons();
             this.condField.setFocused(true);
         } else if (button.id == 10) {
             int cur = tile.getRedstoneLevel(selectedSide);
@@ -121,19 +96,14 @@ public class GuiActuator extends GuiContainer {
         } else if (button.id == 11) {
             int cur = tile.getRedstoneLevel(selectedSide);
             tile.setRedstoneLevel(selectedSide, Math.min(15, cur + 1));
-        } else if (button.id >= 20 && button.id < 26) {
-            // 输出方向：点击直接设置
-            tile.setSignalDir(selectedSide, DIR_IDX[button.id - 20]);
-            refreshOutDirButtons();
         } else if (button.id == 12) {
             // 保存：发网络包到服务端
             String expr = condField.getText();
             String outExpr = outField.getText();
             int rs = tile.getRedstoneLevel(selectedSide);
-            int outDir = tile.getSignalDir(selectedSide);
             MinecraftIotMod.network.sendToServer(
                     new PacketActuatorConfig(tile.xCoord, tile.yCoord, tile.zCoord,
-                            selectedSide, expr, rs, outExpr, outDir));
+                            selectedSide, expr, rs, outExpr));
         }
     }
 
@@ -154,8 +124,6 @@ public class GuiActuator extends GuiContainer {
         this.fontRendererObj.drawString("条件 (" + ForgeDirection.VALID_DIRECTIONS[selectedSide].name() + "):", 8, 58, 0x404040);
         // 输出表达式标签
         this.fontRendererObj.drawString("输出表达式:", 8, 82, 0x404040);
-        // 输出方向标签
-        this.fontRendererObj.drawString("输出方向:", 8, 114, 0x404040);
         // 红石强度标签
         this.fontRendererObj.drawString("强度:", RS_LABEL_X, RS_Y + 3, 0x404040);
         this.fontRendererObj.drawString(String.valueOf(tile.getRedstoneLevel(selectedSide)), RS_VAL_X, RS_VAL_Y + 3, 0x404040);

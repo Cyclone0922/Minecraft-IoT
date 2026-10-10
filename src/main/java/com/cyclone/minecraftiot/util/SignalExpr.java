@@ -23,7 +23,18 @@ public class SignalExpr {
     public static SignalValue evaluate(String expr, NBTTagCompound nbt, SignalValue in) {
         if (expr == null || expr.trim().isEmpty()) return null;
         try {
-            Parser p = new Parser(expr, nbt, in);
+            Parser p = new Parser(expr, nbt, new SignalValue[]{in}, 0);
+            return p.parseOr();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 求值值表达式（多面输入）；ins 为 6 面输入数组（可为 null 元素）；selfSide 为当前编辑面 */
+    public static SignalValue evaluate(String expr, NBTTagCompound nbt, SignalValue[] ins, int selfSide) {
+        if (expr == null || expr.trim().isEmpty()) return null;
+        try {
+            Parser p = new Parser(expr, nbt, ins, selfSide);
             return p.parseOr();
         } catch (Exception e) {
             return null;
@@ -41,18 +52,26 @@ public class SignalExpr {
         return v != null && v.truthy();
     }
 
+    /** 条件判断（多面输入） */
+    public static boolean test(String expr, NBTTagCompound nbt, SignalValue[] ins, int selfSide) {
+        SignalValue v = evaluate(expr, nbt, ins, selfSide);
+        return v != null && v.truthy();
+    }
+
     // ============ 递归下降解析器 ============
 
     private static final class Parser {
         private final String s;
         private final NBTTagCompound nbt;
-        private final SignalValue in;
+        private final SignalValue[] ins;
+        private final int selfSide;
         private int pos = 0;
 
-        Parser(String s, NBTTagCompound nbt, SignalValue in) {
+        Parser(String s, NBTTagCompound nbt, SignalValue[] ins, int selfSide) {
             this.s = s;
             this.nbt = nbt;
-            this.in = in;
+            this.ins = ins;
+            this.selfSide = selfSide;
         }
 
         private void ws() { while (pos < s.length() && Character.isWhitespace(s.charAt(pos))) pos++; }
@@ -326,16 +345,48 @@ public class SignalExpr {
             return resolve(name);
         }
 
-        /** 变量解析：{in} → 输入值；其他路径 → NBT 值（Number→DOUBLE，Boolean→BOOLEAN，String→STRING） */
+        /**
+         * 变量解析：
+         *   {in}    → 当前编辑面（selfSide）收到的输入
+         *   {inN}/{inE}/{inS}/{inW}/{inU}/{inD} → 指定方向面的输入（综合多面信号用）
+         *   其他路径 → NBT 值（Number→DOUBLE，Boolean→BOOLEAN，String→STRING）
+         */
         private SignalValue resolve(String path) {
             if (path == null || path.isEmpty()) return null;
-            if (path.equals("in")) return in;
+            if (path.startsWith("in")) {
+                return resolveIn(path);
+            }
             if (nbt == null) return null;
             Object v = NbtVariableUtil.resolveValue(nbt, path);
             if (v == null) return null;
             if (v instanceof Boolean) return SignalValue.ofBool((Boolean) v);
             if (v instanceof Number) return SignalValue.ofDouble(((Number) v).doubleValue());
             return SignalValue.ofString(v.toString());
+        }
+
+        /** {in} / {inX} 解析；未识别方向或对应面无输入返回 null（不落入 NBT 解析） */
+        private SignalValue resolveIn(String path) {
+            if (ins == null) return null;
+            if (path.equals("in")) {
+                return (selfSide >= 0 && selfSide < ins.length) ? ins[selfSide] : null;
+            }
+            if (path.length() == 3) {
+                int side = dirSide(path.charAt(2));
+                if (side >= 0 && side < ins.length) return ins[side];
+            }
+            return null;
+        }
+
+        private static int dirSide(char c) {
+            switch (c) {
+                case 'N': return 2; // NORTH
+                case 'S': return 3; // SOUTH
+                case 'W': return 4; // WEST
+                case 'E': return 5; // EAST
+                case 'U': return 1; // UP
+                case 'D': return 0; // DOWN
+                default: return -1;
+            }
         }
 
         private SignalValue apply(String name, java.util.List<SignalValue> args) {

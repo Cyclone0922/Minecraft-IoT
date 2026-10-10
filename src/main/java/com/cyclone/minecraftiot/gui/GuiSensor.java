@@ -107,7 +107,9 @@ public class GuiSensor extends GuiContainer {
         drawRect(sx + 1, sy + 1, sx + 17, sy + 17, 0xFF8B8B8B);
 
         // "写卡"按钮（槽位右侧）。显示配置编辑已迁移到连接器工作台，传感器不再提供"配置"按钮。
-        drawRect(i + BIND_X, j + BIND_Y, i + BIND_X + BIND_W, j + BIND_Y + BIND_H, 0xFF3B6EA5);
+        // 必须选中一个方向才能写卡（连接器只支持绑定单一方向）；未选时按钮置灰
+        boolean bindOk = selectedIndex >= 0;
+        drawRect(i + BIND_X, j + BIND_Y, i + BIND_X + BIND_W, j + BIND_Y + BIND_H, bindOk ? 0xFF3B6EA5 : 0xFF777777);
         this.fontRendererObj.drawString("\u5199\u5361", i + BIND_X + 6, j + BIND_Y + 5, 0xFFFFFFFF);
 
         // 六个方向按钮
@@ -224,8 +226,9 @@ public class GuiSensor extends GuiContainer {
         }
 
         // "写入绑定卡"按钮：弹出命名框，确认后再连同名字绑定到服务端
+        // 连接器只支持绑定单一方向：未选中方向（selectedIndex<0）时点击无效
         if (inRect(mouseX, mouseY, i + BIND_X, j + BIND_Y, BIND_W, BIND_H)) {
-            if (tileSensor != null) {
+            if (tileSensor != null && selectedIndex >= 0) {
                 openNaming();
             }
             return;
@@ -286,14 +289,14 @@ public class GuiSensor extends GuiContainer {
     private void openNaming() {
         naming = true;
         String label = dirLabelFor(selectedIndex);
-        nameField.setText("\u7ed1\u5b9a\u5361-" + (label.isEmpty() ? "\u5168\u90e8" : label));
+        nameField.setText("\u7ed1\u5b9a\u5361-" + (label.isEmpty() ? "?" : label));
         nameField.setFocused(true);
         nameField.setCursorPositionEnd();
     }
 
-    /** 确认命名：把方向 + 自定义名字发给服务端绑定并关闭弹窗 */
+    /** 确认命名：把方向 + 自定义名字发给服务端绑定并关闭弹窗（必须已选方向） */
     private void confirmNaming() {
-        if (tileSensor != null) {
+        if (tileSensor != null && selectedIndex >= 0) {
             MinecraftIotMod.network.sendToServer(new PacketBindConnector(tileSensor.xCoord, tileSensor.yCoord, tileSensor.zCoord, selectedIndex, nameField.getText()));
         }
         naming = false;
