@@ -35,7 +35,7 @@ public class PacketSetSensorLabel implements IMessage {
         z = buf.readInt();
         dirIndex = buf.readInt();
         int len = buf.readInt();
-        label = buf.readBytes(Math.min(len, 300)).toString(java.nio.charset.StandardCharsets.UTF_8);
+        label = buf.readBytes(Math.min(len, 300)).toString(java.nio.charset.Charset.forName("UTF-8"));
     }
 
     @Override
@@ -45,7 +45,7 @@ public class PacketSetSensorLabel implements IMessage {
         buf.writeInt(z);
         buf.writeInt(dirIndex);
         String s = label == null ? "" : label;
-        byte[] b = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] b = s.getBytes(java.nio.charset.Charset.forName("UTF-8"));
         buf.writeInt(b.length);
         buf.writeBytes(b);
     }

@@ -218,6 +218,15 @@ public class TileActuator extends TileEntity implements IInventory {
         return arr;
     }
 
+    /**
+     * 6 面输入快照（按指定求值面的 buildInValues 语义）。
+     * public：供网络包生成全屏表达式编辑器的 {inX} 可用变量列表。
+     */
+    public SignalValue[] getInputSnapshotFor(int side) {
+        if (side < 0 || side > 5) side = 0;
+        return buildInValues(side);
+    }
+
     private static int oppositeSide(int side) {
         if (side == 0) return 1; // D <-> U
         if (side == 1) return 0;
@@ -278,8 +287,11 @@ public class TileActuator extends TileEntity implements IInventory {
         }
     }
 
-    /** 读取绑定卡指向的目标机器 NBT（复用传感器的多方块解析逻辑） */
-    private NBTTagCompound readTargetNbt() {
+    /**
+     * 读取绑定卡指向的目标机器 NBT（复用传感器的多方块解析逻辑）。
+     * public：供服务端网络包按需生成目标 NBT 快照（执行器全屏表达式编辑器的可用变量列表）。
+     */
+    public NBTTagCompound readTargetNbt() {
         if (!hasConnector()) return null;
         NBTTagCompound tag = connectorStack.getTagCompound();
         int sx = tag.getInteger("sensorX");

@@ -10,6 +10,9 @@ import com.cyclone.minecraftiot.gui.GuiHandler;
 import com.cyclone.minecraftiot.item.ItemConnector;
 import com.cyclone.minecraftiot.item.ItemSkillRedstone;
 import com.cyclone.minecraftiot.network.PacketActuatorConfig;
+import com.cyclone.minecraftiot.network.PacketActuatorNbtData;
+import com.cyclone.minecraftiot.network.PacketActuatorNbtRequest;
+import com.cyclone.minecraftiot.network.PacketActuatorSaveAck;
 import com.cyclone.minecraftiot.network.PacketBindConnector;
 import com.cyclone.minecraftiot.network.PacketDisplayData;
 import com.cyclone.minecraftiot.network.PacketOpenRemoteGui;
@@ -125,6 +128,9 @@ public class MinecraftIotMod {
         network.registerMessage(PacketWorkbenchAction.Handler.class, PacketWorkbenchAction.class, 8, Side.SERVER); // 工作台动作 -> 服务端
         network.registerMessage(PacketWorkbenchRequest.Handler.class, PacketWorkbenchRequest.class, 9, Side.SERVER); // 工作台状态请求 -> 服务端
         network.registerMessage(PacketWorkbenchData.Handler.class, PacketWorkbenchData.class, 10, Side.CLIENT); // 工作台状态数据 -> 客户端
+        network.registerMessage(PacketActuatorNbtRequest.Handler.class, PacketActuatorNbtRequest.class, 11, Side.SERVER); // 执行器目标NBT请求 -> 服务端
+        network.registerMessage(PacketActuatorNbtData.Handler.class, PacketActuatorNbtData.class, 12, Side.CLIENT); // 执行器目标NBT数据 -> 客户端
+        network.registerMessage(PacketActuatorSaveAck.Handler.class, PacketActuatorSaveAck.class, 13, Side.CLIENT); // 执行器保存确认 -> 客户端
 
         // Esc 关闭目标机器GUI后返回显示器GUI（ServerTickEvent 发在 FML bus 上）
         FMLCommonHandler.instance().bus().register(new RemoteGuiReturn());

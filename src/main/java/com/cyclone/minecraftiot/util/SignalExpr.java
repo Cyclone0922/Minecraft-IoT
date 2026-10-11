@@ -46,6 +46,166 @@ public class SignalExpr {
         return evaluate(expr, nbt, null);
     }
 
+    /**
+     * 语法校验（保存前用）：只做词法/结构检查，不依赖 NBT 或输入值求值，
+     * 因此不会因变量缺失而误判（如 "{inW} > 600 && {inN} > 800" 在无输入时求值为 null，但语法合法）。
+     * 空/纯空白视为合法（表示清空配置）。
+     * 规则：允许 token 为 {路径}、"字符串"、数字、标识符、运算符 + - * / > >= < <= == != && || ! ? : ( ) ,；
+     * 括号与引号必须闭合；== 必须成对、&& / || 必须成对；不得出现非法字符。
+     */
+    public static boolean isValid(String expr) {
+        if (expr == null) return true;
+        String s = expr.trim();
+        if (s.isEmpty()) return true;
+        int paren = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (Character.isWhitespace(c)) continue;
+            if (c == '{') { // 变量 {路径}，允许字母数字 _ .
+                int j = s.indexOf('}', i + 1);
+                if (j < 0) return false;
+                String inner = s.substring(i + 1, j);
+                if (inner.isEmpty()) return false;
+                for (int k = 0; k < inner.length(); k++) {
+                    char ic = inner.charAt(k);
+                    if (!(Character.isLetterOrDigit(ic) || ic == '_' || ic == '.')) return false;
+                }
+                i = j;
+                continue;
+            }
+            if (c == '"') { // 字符串，需闭合，支持 \ 转义
+                int j = i + 1;
+                boolean closed = false;
+                while (j < s.length()) {
+                    char q = s.charAt(j);
+                    if (q == '\\') { j += 2; continue; }
+                    if (q == '"') { closed = true; j++; break; }
+                    j++;
+                }
+                if (!closed) return false;
+                i = j - 1;
+                continue;
+            }
+            if (c == '(') { paren++; continue; }
+            if (c == ')') { paren--; if (paren < 0) return false; continue; }
+            if (Character.isLetterOrDigit(c) || c == '_' || c == '.') continue;
+            if (c == '+' || c == '-' || c == '*' || c == '/') continue;
+            if (c == '&' || c == '|') { // && || 必须成对
+                if (i + 1 >= s.length() || s.charAt(i + 1) != c) return false;
+                i++;
+                continue;
+            }
+            if (c == '=') { // == 必须成对
+                if (i + 1 >= s.length() || s.charAt(i + 1) != '=') return false;
+                i++;
+                continue;
+            }
+            if (c == '>' || c == '<' || c == '!') { // 允许单独或跟 '='（>= <= !=；! 单目）
+                if (i + 1 < s.length() && s.charAt(i + 1) == '=') i++;
+                continue;
+            }
+            if (c == '?' || c == ':') continue;
+            if (c == ',') continue;
+            return false; // 其他字符非法
+        }
+        return paren == 0;
+    }
+
+    /**
+     * 表达式空格标准化（保存时调用）：
+     * 去掉所有多余空白（空格/TAB/换行），按 token 重建——
+     * 变量/数字/字符串/标识符与运算符之间统一加一个空格；
+     * 例外：右括号与逗号紧贴左侧、左括号紧贴右侧、函数名与左括号之间不加空格。
+     * 字符串内部内容（含空格与 \n 转义）原样保留，不影响显示文本与换行功能。
+     * 遇到无法识别的结构时原样返回（不破坏表达式）。
+     */
+    public static String normalize(String expr) {
+        if (expr == null) return null;
+        String s = expr.trim();
+        if (s.isEmpty()) return "";
+        StringBuilder out = new StringBuilder();
+        boolean first = true;
+        boolean prevIdent = false;      // 上一个 token 是标识符（函数名/true/false）
+        boolean prevOpenParen = false;  // 上一个 token 是左括号
+        int i = 0;
+        while (i < s.length()) {
+            char c = s.charAt(i);
+            if (Character.isWhitespace(c)) { i++; continue; }
+            String tok;
+            int kind; // 0=词 1=运算符 2=括号 3=逗号
+            boolean ident = false;
+            if (c == '{') { // 变量 {路径}
+                int j = s.indexOf('}', i + 1);
+                if (j < 0) return expr;
+                tok = s.substring(i, j + 1);
+                kind = 0;
+                i = j + 1;
+            } else if (c == '"') { // 字符串（含转义，内部原样保留）
+                int j = i + 1;
+                boolean closed = false;
+                while (j < s.length()) {
+                    char q = s.charAt(j);
+                    if (q == '\\') { j += 2; continue; }
+                    if (q == '"') { closed = true; j++; break; }
+                    j++;
+                }
+                if (!closed) return expr;
+                tok = s.substring(i, j);
+                kind = 0;
+                i = j;
+            } else if (Character.isDigit(c) || c == '.') { // 数字（含小数/指数）
+                int j = i;
+                while (j < s.length()) {
+                    char d = s.charAt(j);
+                    if (Character.isDigit(d) || d == '.' || d == 'e' || d == 'E') { j++; continue; }
+                    if ((d == '+' || d == '-') && j > i
+                            && (s.charAt(j - 1) == 'e' || s.charAt(j - 1) == 'E')) { j++; continue; }
+                    break;
+                }
+                tok = s.substring(i, j);
+                kind = 0;
+                i = j;
+            } else if (Character.isLetter(c) || c == '_') { // 标识符（函数名/true/false）
+                int j = i;
+                while (j < s.length() && (Character.isLetterOrDigit(s.charAt(j)) || s.charAt(j) == '_')) j++;
+                tok = s.substring(i, j);
+                kind = 0;
+                ident = true;
+                i = j;
+            } else if ((c == '&' || c == '|' || c == '=' || c == '!' || c == '>' || c == '<')
+                    && i + 1 < s.length() && s.charAt(i + 1) == c) { // && || == != >> <<
+                tok = s.substring(i, i + 2);
+                kind = 1;
+                i += 2;
+            } else if ((c == '>' || c == '<' || c == '=' || c == '!')
+                    && i + 1 < s.length() && s.charAt(i + 1) == '=') { // >= <=
+                tok = s.substring(i, i + 2);
+                kind = 1;
+                i += 2;
+            } else {
+                tok = String.valueOf(c);
+                if (c == '(' || c == ')') kind = 2;
+                else if (c == ',') kind = 3;
+                else kind = 1;
+                i++;
+            }
+            // 空格规则
+            if (!first) {
+                boolean needSpace = true;
+                if (kind == 2 && tok.equals(")")) needSpace = false;            // 右括号紧贴左侧
+                else if (kind == 3) needSpace = false;                           // 逗号紧贴左侧
+                else if (prevOpenParen) needSpace = false;                       // 左括号紧贴右侧
+                else if (kind == 2 && tok.equals("(") && prevIdent) needSpace = false; // 函数调用
+                if (needSpace) out.append(' ');
+            }
+            out.append(tok);
+            first = false;
+            prevIdent = ident;
+            prevOpenParen = (kind == 2 && tok.equals("("));
+        }
+        return out.toString();
+    }
+
     /** 条件判断：表达式求值成功且 truthy */
     public static boolean test(String expr, NBTTagCompound nbt, SignalValue in) {
         SignalValue v = evaluate(expr, nbt, in);

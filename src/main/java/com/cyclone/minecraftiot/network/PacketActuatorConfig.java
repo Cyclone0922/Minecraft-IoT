@@ -1,6 +1,8 @@
 package com.cyclone.minecraftiot.network;
 
+import com.cyclone.minecraftiot.MinecraftIotMod;
 import com.cyclone.minecraftiot.tileentity.TileActuator;
+import com.cyclone.minecraftiot.util.SignalExpr;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 import cpw.mods.fml.common.network.simpleimpl.IMessageHandler;
 import cpw.mods.fml.common.network.simpleimpl.MessageContext;
@@ -9,7 +11,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 
 /**
  * 客户端 -> 服务端：在执行器 GUI 保存某面的条件表达式、输出表达式和红石强度。
@@ -42,9 +44,9 @@ public class PacketActuatorConfig implements IMessage {
         side = buf.readInt();
         redstoneLevel = buf.readInt();
         int len = buf.readInt();
-        condition = buf.readBytes(Math.min(len, 500)).toString(StandardCharsets.UTF_8);
+        condition = buf.readBytes(Math.min(len, 5000)).toString(Charset.forName("UTF-8"));
         int len2 = buf.readInt();
-        outputExpr = buf.readBytes(Math.min(len2, 500)).toString(StandardCharsets.UTF_8);
+        outputExpr = buf.readBytes(Math.min(len2, 5000)).toString(Charset.forName("UTF-8"));
     }
 
     @Override
@@ -52,10 +54,10 @@ public class PacketActuatorConfig implements IMessage {
         buf.writeInt(x); buf.writeInt(y); buf.writeInt(z);
         buf.writeInt(side);
         buf.writeInt(redstoneLevel);
-        byte[] b = condition.getBytes(StandardCharsets.UTF_8);
+        byte[] b = condition.getBytes(Charset.forName("UTF-8"));
         buf.writeInt(b.length);
         buf.writeBytes(b);
-        byte[] b2 = outputExpr.getBytes(StandardCharsets.UTF_8);
+        byte[] b2 = outputExpr.getBytes(Charset.forName("UTF-8"));
         buf.writeInt(b2.length);
         buf.writeBytes(b2);
     }
@@ -68,9 +70,21 @@ public class PacketActuatorConfig implements IMessage {
                 TileEntity te = world.getTileEntity(msg.x, msg.y, msg.z);
                 if (te instanceof TileActuator) {
                     TileActuator act = (TileActuator) te;
-                    act.setCondition(msg.side, msg.condition);
+                    // 语法校验：非法表达式拒绝保存（不落存档、不回成功确认，客户端静默）
+                    if (!SignalExpr.isValid(msg.condition) || !SignalExpr.isValid(msg.outputExpr)) {
+                        MinecraftIotMod.log.warn("Actuator save rejected: invalid expr side=" + msg.side
+                                + " cond=[" + msg.condition + "] out=[" + msg.outputExpr + "]");
+                        return null;
+                    }
+                    // 空格标准化：去掉多余空白（空格/TAB/换行），变量与运算符之间统一一个空格；
+                    // 字符串内部内容（含 \n 换行转义）原样保留。
+                    String cond = SignalExpr.normalize(msg.condition);
+                    String out = SignalExpr.normalize(msg.outputExpr);
+                    act.setCondition(msg.side, cond == null ? msg.condition : cond);
                     act.setRedstoneLevel(msg.side, msg.redstoneLevel);
-                    act.setOutputExpr(msg.side, msg.outputExpr);
+                    act.setOutputExpr(msg.side, out == null ? msg.outputExpr : out);
+                    // 保存成功确认：客户端收到后才显示"保存成功"
+                    return new PacketActuatorSaveAck(msg.x, msg.y, msg.z, msg.side);
                 }
             }
             return null;
