@@ -7,7 +7,10 @@ import com.cyclone.minecraftiot.block.BlockDisplay;
 import com.cyclone.minecraftiot.block.BlockRouter;
 import com.cyclone.minecraftiot.block.BlockSensor;
 import com.cyclone.minecraftiot.gui.GuiHandler;
+import com.cyclone.minecraftiot.gui.GuiRouterSelect;
 import com.cyclone.minecraftiot.item.ItemConnector;
+import com.cyclone.minecraftiot.item.ItemScriptCopier;
+import com.cyclone.minecraftiot.item.ItemSkillItemTransfer;
 import com.cyclone.minecraftiot.item.ItemSkillRedstone;
 import com.cyclone.minecraftiot.network.PacketActuatorConfig;
 import com.cyclone.minecraftiot.network.PacketActuatorNbtData;
@@ -16,6 +19,8 @@ import com.cyclone.minecraftiot.network.PacketActuatorSaveAck;
 import com.cyclone.minecraftiot.network.PacketBindConnector;
 import com.cyclone.minecraftiot.network.PacketDisplayData;
 import com.cyclone.minecraftiot.network.PacketOpenRemoteGui;
+import com.cyclone.minecraftiot.network.PacketRouterBind;
+import com.cyclone.minecraftiot.network.PacketRouterListData;
 import com.cyclone.minecraftiot.network.PacketSensorData;
 import com.cyclone.minecraftiot.network.PacketSetDisplayFace;
 import com.cyclone.minecraftiot.network.PacketSetDisplaySettings;
@@ -38,6 +43,8 @@ import cpw.mods.fml.common.SidedProxy;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import cpw.mods.fml.common.registry.GameRegistry;
@@ -73,6 +80,8 @@ public class MinecraftIotMod {
     public static Block signalBusBlock;
     public static Item connectorItem;
     public static Item skillRedstoneItem;
+    public static Item skillItemTransferItem;
+    public static Item scriptCopierItem;
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -108,6 +117,14 @@ public class MinecraftIotMod {
         GameRegistry.registerItem(skillRedstoneItem, "skill_redstone");
         skillRedstoneItem.setCreativeTab(CreativeTabs.tabMisc);
 
+        // 0.4.0 新物品：物品转移技能插件、脚本拷贝器
+        skillItemTransferItem = new ItemSkillItemTransfer().setUnlocalizedName("skill_item_transfer");
+        GameRegistry.registerItem(skillItemTransferItem, "skill_item_transfer");
+        skillItemTransferItem.setCreativeTab(CreativeTabs.tabMisc);
+        scriptCopierItem = new ItemScriptCopier().setUnlocalizedName("script_copier");
+        GameRegistry.registerItem(scriptCopierItem, "script_copier");
+        scriptCopierItem.setCreativeTab(CreativeTabs.tabMisc);
+
         // 注册TileEntity（id 带 mod 前缀，避免与其他 mod 的通用短 id 冲突，如 "TileSensor" 被整合包其他 mod 抢占）
         GameRegistry.registerTileEntity(TileSensor.class, "minecraftiot:TileSensor");
         GameRegistry.registerTileEntity(TileDisplay.class, "minecraftiot:TileDisplay");
@@ -131,9 +148,14 @@ public class MinecraftIotMod {
         network.registerMessage(PacketActuatorNbtRequest.Handler.class, PacketActuatorNbtRequest.class, 11, Side.SERVER); // 执行器目标NBT请求 -> 服务端
         network.registerMessage(PacketActuatorNbtData.Handler.class, PacketActuatorNbtData.class, 12, Side.CLIENT); // 执行器目标NBT数据 -> 客户端
         network.registerMessage(PacketActuatorSaveAck.Handler.class, PacketActuatorSaveAck.class, 13, Side.CLIENT); // 执行器保存确认 -> 客户端
+        network.registerMessage(PacketRouterListData.Handler.class, PacketRouterListData.class, 14, Side.CLIENT); // 路由器列表 -> 客户端（选择界面）
+        network.registerMessage(PacketRouterBind.Handler.class, PacketRouterBind.class, 15, Side.SERVER); // 路由器绑定 -> 服务端
 
         // Esc 关闭目标机器GUI后返回显示器GUI（ServerTickEvent 发在 FML bus 上）
         FMLCommonHandler.instance().bus().register(new RemoteGuiReturn());
+
+        // 客户端主线程泵：路由器选择浮窗由网络线程记录、渲染主线程打开（避免跨线程 GUI 操作）
+        FMLCommonHandler.instance().bus().register(new ClientTickHook());
 
         // 注册GUI处理器
         proxy.registerGuiHandler();  // 或在CommonProxy中调用 注册 GUI 处理器
@@ -147,5 +169,15 @@ public class MinecraftIotMod {
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         // 跨模组交互等
+    }
+
+    /** 客户端主线程钩子：每 tick 泵出待打开的路由器选择浮窗（网络线程只记录，不直接操作 GUI） */
+    public static class ClientTickHook {
+        @SubscribeEvent
+        public void onClientTick(TickEvent.ClientTickEvent event) {
+            if (event.phase == TickEvent.Phase.END) {
+                GuiRouterSelect.pump();
+            }
+        }
     }
 }

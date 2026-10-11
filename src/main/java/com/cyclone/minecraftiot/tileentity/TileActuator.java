@@ -2,6 +2,7 @@ package com.cyclone.minecraftiot.tileentity;
 
 import com.cyclone.minecraftiot.item.ItemConnector;
 import com.cyclone.minecraftiot.item.ItemSkill;
+import com.cyclone.minecraftiot.item.ItemSkillItemTransfer;
 import com.cyclone.minecraftiot.item.ItemSkillRedstone;
 import com.cyclone.minecraftiot.util.MultiblockResolver;
 import com.cyclone.minecraftiot.util.SignalExpr;
@@ -10,11 +11,16 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraftforge.common.util.ForgeDirection;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * 普通执行器 TileEntity（P1）。
@@ -56,6 +62,13 @@ public class TileActuator extends TileEntity implements IInventory {
     private SignalValue remoteInputMain;                    // 绑卡远端（目标执行器）信号值，兜底输入
     private SignalValue signalOutCache;                     // 最近一次输出（写 NBT 主键 SignalOut）
     private NBTTagCompound targetNbtCache;                  // 绑卡目标 NBT 快照（每 40t 刷新）
+
+    // ===== 0.4.0 物品转移（服务端运行时） =====
+    private List<ItemStack> takeBuffer = new ArrayList<ItemStack>(); // take() 取出的物品缓存，供 insert() 放入（落 NBT 防重启丢失）
+
+    // ===== 路由器组网（落存档） =====
+    private int routerX, routerY, routerZ, routerDim = Integer.MIN_VALUE;
+    private int routerBlocks; // 绑定路由器组的方块数（0 = 旧存档未知，校验时只验证中心）
 
     private boolean firstTick = true;
 
@@ -131,6 +144,176 @@ public class TileActuator extends TileEntity implements IInventory {
         return skillStack != null && skillStack.getItem() instanceof ItemSkillRedstone;
     }
 
+    /** 是否已安装物品转移技能 */
+    public boolean hasItemTransferSkill() {
+        return skillStack != null && skillStack.getItem() instanceof ItemSkillItemTransfer;
+    }
+
+    /** 已安装技能的显示名（GUI 用）；无插件返回 null */
+    public String getSkillName() {
+        if (skillStack == null || !(skillStack.getItem() instanceof ItemSkill)) return null;
+        return ((ItemSkill) skillStack.getItem()).getSkillName();
+    }
+
+    // ===== 路由器组网 =====
+
+    public boolean isRouterBound() {
+        return routerDim != Integer.MIN_VALUE;
+    }
+
+    public void setRouter(int x, int y, int z, int blocks) {
+        this.routerX = x;
+        this.routerY = y;
+        this.routerZ = z;
+        this.routerBlocks = blocks;
+        this.routerDim = worldObj != null ? worldObj.provider.dimensionId : 0;
+        markDirty();
+        syncToClient();
+    }
+
+    public void clearRouter() {
+        routerDim = Integer.MIN_VALUE;
+        routerBlocks = 0;
+        markDirty();
+        syncToClient();
+    }
+
+    public int getRouterX() { return routerX; }
+    public int getRouterY() { return routerY; }
+    public int getRouterZ() { return routerZ; }
+    public int getRouterDim() { return routerDim; }
+    public int getRouterBlocks() { return routerBlocks; }
+
+    // ===== 0.4.0 物品转移：take() / insert() =====
+
+    /**
+     * take()：从当前面（求值面=输出面）相邻容器取出物品，存入 takeBuffer。
+     * count < 0 表示全部取出；返回实际取出物品数量（可作表达式值）。
+     * 未安装物品转移插件或相邻无容器时返回 0。
+     */
+    public double doTake(int side, int count) {
+        if (!hasItemTransferSkill()) return 0;
+        IInventory inv = getAdjacentInventory(side);
+        if (inv == null) return 0;
+        double moved = 0;
+        for (int i = 0; i < inv.getSizeInventory(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
+            if (stack == null || stack.stackSize <= 0) continue;
+            int want = (count < 0) ? stack.stackSize
+                    : (int) Math.min(Math.max(0, count - moved), stack.stackSize);
+            if (want <= 0) break;
+            ItemStack taken = inv.decrStackSize(i, want);
+            if (taken == null || taken.stackSize <= 0) continue;
+            takeBuffer.add(taken.copy());
+            moved += taken.stackSize;
+            if (count >= 0 && moved >= count) break;
+        }
+        if (moved > 0) {
+            if (inv instanceof TileEntity) ((TileEntity) inv).markDirty();
+            markDirty();
+        }
+        return moved;
+    }
+
+    /**
+     * insert()：把 takeBuffer 中的物品放入当前面相邻容器。
+     * count < 0 表示尽量放入全部缓存；返回实际放入数量。
+     */
+    public double doInsert(int side, int count) {
+        if (!hasItemTransferSkill()) return 0;
+        IInventory inv = getAdjacentInventory(side);
+        if (inv == null) return 0;
+        double moved = 0;
+        Iterator<ItemStack> it = takeBuffer.iterator();
+        while (it.hasNext()) {
+            ItemStack st = it.next();
+            if (st == null || st.stackSize <= 0) { it.remove(); continue; }
+            int want = (count < 0) ? st.stackSize
+                    : (int) Math.min(Math.max(0, count - moved), st.stackSize);
+            if (want <= 0) break;
+            int placed = placeInto(inv, st, want);
+            if (placed <= 0) continue;
+            st.stackSize -= placed;
+            moved += placed;
+            if (st.stackSize <= 0) it.remove();
+            if (count >= 0 && moved >= count) break;
+        }
+        if (moved > 0) {
+            if (inv instanceof TileEntity) ((TileEntity) inv).markDirty();
+            markDirty();
+        }
+        return moved;
+    }
+
+    /** 当前面相邻的 IInventory 容器；无则 null */
+    private IInventory getAdjacentInventory(int side) {
+        if (side < 0 || side >= 6) return null;
+        ForgeDirection dir = ForgeDirection.VALID_DIRECTIONS[side];
+        TileEntity te = worldObj.getTileEntity(
+                xCoord + dir.offsetX, yCoord + dir.offsetY, zCoord + dir.offsetZ);
+        return (te instanceof IInventory) ? (IInventory) te : null;
+    }
+
+    /** 尝试把 stack 的 want 个放入容器：先堆叠同物品槽，再找空槽；返回实际放入数 */
+    private int placeInto(IInventory inv, ItemStack stack, int want) {
+        int limit = Math.max(1, Math.min(inv.getInventoryStackLimit(), stack.getMaxStackSize()));
+        // 优先堆叠到同物品槽
+        for (int i = 0; i < inv.getSizeInventory(); i++) {
+            ItemStack cur = inv.getStackInSlot(i);
+            if (cur == null) continue;
+            if (cur.isItemEqual(stack) && ItemStack.areItemStackTagsEqual(cur, stack)) {
+                int space = Math.max(0, Math.min(limit, cur.getMaxStackSize()) - cur.stackSize);
+                if (space <= 0) continue;
+                int put = Math.min(want, space);
+                cur.stackSize += put;
+                inv.setInventorySlotContents(i, cur);
+                return put;
+            }
+        }
+        // 再找空槽
+        for (int i = 0; i < inv.getSizeInventory(); i++) {
+            if (inv.getStackInSlot(i) != null) continue;
+            if (!inv.isItemValidForSlot(i, stack)) continue;
+            ItemStack copy = stack.copy();
+            copy.stackSize = Math.min(want, limit);
+            inv.setInventorySlotContents(i, copy);
+            return copy.stackSize;
+        }
+        return 0;
+    }
+
+    /** takeBuffer 当前物品总数（GUI 诊断用） */
+    public int getTakeBufferSize() {
+        int n = 0;
+        for (ItemStack s : takeBuffer) {
+            if (s != null) n += s.stackSize;
+        }
+        return n;
+    }
+
+    /** 掉方块/卸载时把 takeBuffer 物品就近放回相邻容器；放不下返回物品列表由方块掉落 */
+    public List<ItemStack> drainTakeBuffer() {
+        if (takeBuffer.isEmpty()) return takeBuffer;
+        // 先尝试就近放回 6 面容器
+        for (int side = 0; side < 6; side++) {
+            IInventory inv = getAdjacentInventory(side);
+            if (inv == null) continue;
+            Iterator<ItemStack> it = takeBuffer.iterator();
+            while (it.hasNext()) {
+                ItemStack st = it.next();
+                if (st == null || st.stackSize <= 0) { it.remove(); continue; }
+                int placed = placeInto(inv, st, st.stackSize);
+                if (placed > 0) {
+                    st.stackSize -= placed;
+                    if (inv instanceof TileEntity) ((TileEntity) inv).markDirty();
+                    if (st.stackSize <= 0) it.remove();
+                }
+            }
+            if (takeBuffer.isEmpty()) break;
+        }
+        return takeBuffer; // 剩余由方块掉落为物品实体
+    }
+
     /** 是否已插绑定卡 */
     public boolean hasConnector() {
         return connectorStack != null && connectorStack.getItem() instanceof ItemConnector
@@ -147,7 +330,48 @@ public class TileActuator extends TileEntity implements IInventory {
             signalTick(); // 技能0 信号域：每 2t（红石刻）
         }
         if (worldObj.getTotalWorldTime() % SCAN_INTERVAL == 0) {
+            validateRouter(); // 路由器组已消失/变形（且其区块已加载）→ 解绑
+            if (!isRouterBound()) {
+                // 未绑定：周期性自动重扫路由器组（覆盖"先放执行器、后放路由器"场景）；
+                // 1 个组 → 容量未满则直连；多个 → 不自动选（右键弹选择界面）；0 个 → 保持未绑定
+                List<com.cyclone.minecraftiot.util.RouterCluster> clusters =
+                        com.cyclone.minecraftiot.util.RouterCluster.findAll(worldObj);
+                if (clusters.size() == 1) {
+                    com.cyclone.minecraftiot.util.RouterCluster c = clusters.get(0);
+                    if (c.countBoundActuators(worldObj) < c.capacity) {
+                        setRouter(c.cx, c.cy, c.cz, c.blockCount);
+                    }
+                }
+            }
             refreshTargetAndRedstone(); // 绑卡远端 + 红石：每 2s
+        }
+    }
+
+    /**
+     * 校验路由器组绑定是否仍然有效：
+     *  - 中心方块已被破坏（其所在区块已加载，能确认不存在）→ 解绑
+     *  - 组已非法（有缺口/超长）或中心不再是最新下东南角 → 解绑（自动重扫会重绑新中心）
+     *  - 组所在区块未加载 → 视为未知，不解绑（避免误清）
+     */
+    private void validateRouter() {
+        if (!isRouterBound()) return;
+        if (routerDim != worldObj.provider.dimensionId) {
+            clearRouter();
+            return;
+        }
+        int cx = routerX >> 4;
+        int cz = routerZ >> 4;
+        if (!worldObj.getChunkProvider().chunkExists(cx, cz)) return;
+        TileEntity te = worldObj.getTileEntity(routerX, routerY, routerZ);
+        if (!(te instanceof TileRouter)) {
+            clearRouter();
+            return;
+        }
+        com.cyclone.minecraftiot.util.RouterCluster c =
+                com.cyclone.minecraftiot.util.RouterCluster.resolve(worldObj, routerX, routerY, routerZ);
+        if (c == null || c.cx != routerX || c.cy != routerY || c.cz != routerZ
+                || (routerBlocks > 0 && c.blockCount != routerBlocks)) {
+            clearRouter();
         }
     }
 
@@ -159,6 +383,21 @@ public class TileActuator extends TileEntity implements IInventory {
      * 值快照 + 一跳/2t 天然防同 tick 振荡；A→B→A 回路表现为交替输出。
      */
     private void signalTick() {
+        // 路由器门控：未连接路由器时拒绝执行任何动作（值传递/红石/物品转移）。
+        // 网络动作必须在路由器侧计费（能量系统），未组网执行器一律空转，防止绕过能量作弊。
+        if (!isRouterBound()) {
+            boolean changed = false;
+            for (int i = 0; i < 6; i++) {
+                if (outBuffer[i] != null) { outBuffer[i] = null; changed = true; }
+                if (currentOutput[i] != 0) { currentOutput[i] = 0; changed = true; }
+            }
+            signalOutCache = null; // 远端执行器通过绑卡读到的 SignalOut 一并切断
+            if (changed) {
+                markDirty();
+                notifyNeighborsOfRedstoneChange();
+            }
+            return;
+        }
         collectInputs();
         SignalValue lastOut = null;
         for (int side = 0; side < 6; side++) {
@@ -170,9 +409,10 @@ public class TileActuator extends TileEntity implements IInventory {
             if (pass) {
                 String outExpr = getOutputExpr(side);
                 if (!outExpr.isEmpty()) {
-                    out = SignalExpr.evaluate(outExpr, targetNbtCache, ins, side);
+                    // 带执行器动作上下文：take()/insert() 在此处执行（以当前求值面为绑定方向）
+                    out = SignalExpr.evaluate(outExpr, targetNbtCache, ins, side, this);
                 } else {
-                    out = SignalExpr.evaluate(cond, targetNbtCache, ins, side); // 默认输出条件计算值（保留类型）
+                    out = SignalExpr.evaluate(cond, targetNbtCache, ins, side, this); // 默认输出条件计算值（保留类型）
                 }
             }
             // 方向合一：输出永远写到本面缓冲（邻居从对面读）
@@ -246,6 +486,8 @@ public class TileActuator extends TileEntity implements IInventory {
 
     /** 绑卡远端 + 红石（每 40t）：刷新目标 NBT 快照、解析远端 SignalOut、红石输出 */
     private void refreshTargetAndRedstone() {
+        // 路由器门控：红石输出同样只在组网后生效（signalTick 已清空输出，这里直接跳过防复活）
+        if (!isRouterBound()) return;
         NBTTagCompound nbt = readTargetNbt();
         targetNbtCache = nbt;
         remoteInputMain = nbt != null ? SignalValue.readFromNBT(nbt, "SignalOut") : null;
@@ -264,10 +506,17 @@ public class TileActuator extends TileEntity implements IInventory {
                     if (result) newOut = redstoneLevels[side];
                 }
             }
-            if (debug && !getCondition(side).isEmpty()) {
+            if (debug) {
                 System.out.println("[Actuator] t=" + worldObj.getTotalWorldTime()
-                        + " side=" + side + " target=" + (nbt != null)
+                        + " bound=" + isRouterBound()
+                        + " router=(" + routerX + "," + routerY + "," + routerZ + ")"
+                        + " skill=" + getSkillName()
+                        + " hasRS=" + hasRedstoneSkill()
+                        + " side=" + side
+                        + " target=" + (nbt != null)
                         + " result=" + result
+                        + " newOut=" + newOut
+                        + " cond=\"" + getCondition(side) + "\""
                         + " cookTime=" + (nbt != null ? nbt.getDouble("cookTime") : "n/a")
                         + " progress=" + (nbt != null ? nbt.getDouble("progress") : "n/a")
                         + " Progress=" + (nbt != null ? nbt.getDouble("Progress") : "n/a")
@@ -440,6 +689,14 @@ public class TileActuator extends TileEntity implements IInventory {
             }
             tag.setInteger("RS" + i, redstoneLevels[i]);
         }
+        // 路由器绑定状态同步到客户端（GUI 状态行显示用）
+        if (isRouterBound()) {
+            tag.setInteger("RouterX", routerX);
+            tag.setInteger("RouterY", routerY);
+            tag.setInteger("RouterZ", routerZ);
+            tag.setInteger("RouterDim", routerDim);
+            tag.setInteger("RouterBlocks", routerBlocks);
+        }
     }
 
     private void readSyncData(NBTTagCompound tag) {
@@ -447,6 +704,16 @@ public class TileActuator extends TileEntity implements IInventory {
             conditions[i] = tag.hasKey("Cond" + i) ? tag.getString("Cond" + i) : "";
             outputExprs[i] = tag.hasKey("OutExpr" + i) ? tag.getString("OutExpr" + i) : "";
             redstoneLevels[i] = tag.hasKey("RS" + i) ? tag.getInteger("RS" + i) : 15;
+        }
+        if (tag.hasKey("RouterDim")) {
+            routerX = tag.getInteger("RouterX");
+            routerY = tag.getInteger("RouterY");
+            routerZ = tag.getInteger("RouterZ");
+            routerDim = tag.getInteger("RouterDim");
+            routerBlocks = tag.hasKey("RouterBlocks") ? tag.getInteger("RouterBlocks") : 0;
+        } else {
+            routerDim = Integer.MIN_VALUE;
+            routerBlocks = 0;
         }
     }
 
@@ -475,9 +742,30 @@ public class TileActuator extends TileEntity implements IInventory {
             tag.setInteger("RS" + i, redstoneLevels[i]);
             tag.setInteger("Out" + i, currentOutput[i]);
         }
-        // 信号主键：供绑卡远端执行器读取最近输出
+        // 信号主键：供绑卡远端执行器读取最近输出；断连/无输出时清除旧值防残留
         if (signalOutCache != null) {
             signalOutCache.writeToNBT(tag, "SignalOut");
+        } else {
+            tag.removeTag("SignalOut");
+        }
+        // 0.4.0 物品转移缓存（防重启丢失）
+        if (!takeBuffer.isEmpty()) {
+            NBTTagList list = new NBTTagList();
+            for (ItemStack s : takeBuffer) {
+                if (s == null) continue;
+                NBTTagCompound t = new NBTTagCompound();
+                s.writeToNBT(t);
+                list.appendTag(t);
+            }
+            if (list.tagCount() > 0) tag.setTag("TakeBuffer", list);
+        }
+        // 路由器绑定
+        if (isRouterBound()) {
+            tag.setInteger("RouterX", routerX);
+            tag.setInteger("RouterY", routerY);
+            tag.setInteger("RouterZ", routerZ);
+            tag.setInteger("RouterDim", routerDim);
+            tag.setInteger("RouterBlocks", routerBlocks);
         }
     }
 
@@ -493,5 +781,25 @@ public class TileActuator extends TileEntity implements IInventory {
             currentOutput[i] = tag.hasKey("Out" + i) ? tag.getInteger("Out" + i) : 0;
         }
         signalOutCache = SignalValue.readFromNBT(tag, "SignalOut");
+        // 0.4.0 物品转移缓存
+        takeBuffer.clear();
+        if (tag.hasKey("TakeBuffer")) {
+            NBTTagList list = tag.getTagList("TakeBuffer", 10);
+            for (int i = 0; i < list.tagCount(); i++) {
+                ItemStack s = ItemStack.loadItemStackFromNBT(list.getCompoundTagAt(i));
+                if (s != null) takeBuffer.add(s);
+            }
+        }
+        // 路由器绑定
+        if (tag.hasKey("RouterDim")) {
+            routerX = tag.getInteger("RouterX");
+            routerY = tag.getInteger("RouterY");
+            routerZ = tag.getInteger("RouterZ");
+            routerDim = tag.getInteger("RouterDim");
+            routerBlocks = tag.hasKey("RouterBlocks") ? tag.getInteger("RouterBlocks") : 0;
+        } else {
+            routerDim = Integer.MIN_VALUE;
+            routerBlocks = 0;
+        }
     }
 }

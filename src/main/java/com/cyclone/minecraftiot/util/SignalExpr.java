@@ -1,5 +1,6 @@
 package com.cyclone.minecraftiot.util;
 
+import com.cyclone.minecraftiot.tileentity.TileActuator;
 import net.minecraft.nbt.NBTTagCompound;
 
 /**
@@ -23,7 +24,7 @@ public class SignalExpr {
     public static SignalValue evaluate(String expr, NBTTagCompound nbt, SignalValue in) {
         if (expr == null || expr.trim().isEmpty()) return null;
         try {
-            Parser p = new Parser(expr, nbt, new SignalValue[]{in}, 0);
+            Parser p = new Parser(expr, nbt, new SignalValue[]{in}, 0, null);
             return p.parseOr();
         } catch (Exception e) {
             return null;
@@ -32,9 +33,19 @@ public class SignalExpr {
 
     /** 求值值表达式（多面输入）；ins 为 6 面输入数组（可为 null 元素）；selfSide 为当前编辑面 */
     public static SignalValue evaluate(String expr, NBTTagCompound nbt, SignalValue[] ins, int selfSide) {
+        return evaluate(expr, nbt, ins, selfSide, null);
+    }
+
+    /**
+     * 求值值表达式（带执行器动作上下文）。
+     * act 非空时表达式中的 take()/insert() 会实际执行物品转移（以 selfSide 为绑定方向）；
+     * act 为 null 时（如条件判断/纯求值）take/insert 返回 0，不产生副作用。
+     */
+    public static SignalValue evaluate(String expr, NBTTagCompound nbt, SignalValue[] ins, int selfSide,
+                                       TileActuator act) {
         if (expr == null || expr.trim().isEmpty()) return null;
         try {
-            Parser p = new Parser(expr, nbt, ins, selfSide);
+            Parser p = new Parser(expr, nbt, ins, selfSide, act);
             return p.parseOr();
         } catch (Exception e) {
             return null;
@@ -225,13 +236,15 @@ public class SignalExpr {
         private final NBTTagCompound nbt;
         private final SignalValue[] ins;
         private final int selfSide;
+        private final TileActuator act; // 动作上下文（take/insert），可 null
         private int pos = 0;
 
-        Parser(String s, NBTTagCompound nbt, SignalValue[] ins, int selfSide) {
+        Parser(String s, NBTTagCompound nbt, SignalValue[] ins, int selfSide, TileActuator act) {
             this.s = s;
             this.nbt = nbt;
             this.ins = ins;
             this.selfSide = selfSide;
+            this.act = act;
         }
 
         private void ws() { while (pos < s.length() && Character.isWhitespace(s.charAt(pos))) pos++; }
@@ -577,6 +590,19 @@ public class SignalExpr {
             }
             if (name.equals("max") && args.size() == 2 && args.get(0) != null && args.get(1) != null) {
                 return SignalValue.ofDouble(Math.max(args.get(0).asDouble(), args.get(1).asDouble()));
+            }
+            // ===== 0.4.0 物品转移：take / insert（仅输出表达式求值、装有物品转移插件时执行） =====
+            if (name.equals("take")) {
+                if (act == null) return SignalValue.ofDouble(0); // 条件判断/无上下文：不产生副作用
+                int n = -1;
+                if (!args.isEmpty() && args.get(0) != null) n = (int) args.get(0).asDouble();
+                return SignalValue.ofDouble(act.doTake(selfSide, n));
+            }
+            if (name.equals("insert")) {
+                if (act == null) return SignalValue.ofDouble(0);
+                int n = -1;
+                if (!args.isEmpty() && args.get(0) != null) n = (int) args.get(0).asDouble();
+                return SignalValue.ofDouble(act.doInsert(selfSide, n));
             }
             return null;
         }

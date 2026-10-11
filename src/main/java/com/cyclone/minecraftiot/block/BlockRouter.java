@@ -1,6 +1,7 @@
 package com.cyclone.minecraftiot.block;
 
 import com.cyclone.minecraftiot.MinecraftIotMod;
+import com.cyclone.minecraftiot.tileentity.TileActuator;
 import com.cyclone.minecraftiot.tileentity.TileRouter;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -47,5 +48,26 @@ public class BlockRouter extends Block {
             }
         }
         return true;
+    }
+
+    /**
+     * 路由器被破坏：向本维度所有已加载、绑定到该路由器的执行器广播"路由器停止"，
+     * 清空其绑定（切换为未连接），避免 GUI 仍显示"路由: 已连"。
+     * 区块卸载不在此列——只有方块真正被破坏才解绑。
+     */
+    @Override
+    public void breakBlock(World world, int x, int y, int z, Block block, int meta) {
+        if (!world.isRemote) {
+            for (Object o : world.loadedTileEntityList) {
+                if (o instanceof TileActuator) {
+                    TileActuator act = (TileActuator) o;
+                    if (act.isRouterBound()
+                            && act.getRouterX() == x && act.getRouterY() == y && act.getRouterZ() == z) {
+                        act.clearRouter();
+                    }
+                }
+            }
+        }
+        super.breakBlock(world, x, y, z, block, meta);
     }
 }

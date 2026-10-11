@@ -217,8 +217,11 @@ public class GuiActuator extends GuiContainer {
         // 状态行（与背包区顶对齐）
         String connStatus = tile.hasConnector() ? "绑定卡: 已插" : "绑定卡: 未插";
         this.fontRendererObj.drawString(connStatus, 8, 148, tile.hasConnector() ? 0x228B22 : 0xAA0000);
-        String skillStatus = tile.hasRedstoneSkill() ? "红石技能: 已装" : "红石技能: 未装";
-        this.fontRendererObj.drawString(skillStatus, 62, 148, tile.hasRedstoneSkill() ? 0x228B22 : 0xAA0000);
+        String skillName = tile.getSkillName();
+        String skillStatus = skillName == null ? "插件: 未装" : "插件: " + skillName;
+        this.fontRendererObj.drawString(skillStatus, 62, 148, skillName != null ? 0x228B22 : 0xAA0000);
+        String routerStatus = tile.isRouterBound() ? "路由: 已连" : "路由: 未连";
+        this.fontRendererObj.drawString(routerStatus, 122, 148, tile.isRouterBound() ? 0x2266BB : 0xAA0000);
 
         // 输入框
         condField.drawTextBox();
