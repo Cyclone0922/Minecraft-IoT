@@ -1,81 +1,129 @@
 package com.cyclone.minecraftiot.gui;
 
-import com.cyclone.minecraftiot.item.ItemConnector;
-import com.cyclone.minecraftiot.item.ItemSkill;
-import com.cyclone.minecraftiot.tileentity.TileActuator;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.InventoryPlayer;
-import net.minecraft.inventory.Container;
-import net.minecraft.inventory.Slot;
-import net.minecraft.item.ItemStack;
+// ============================ 导入区 ============================
+import com.cyclone.minecraftiot.item.ItemConnector; // 绑定卡（连接器）物品类：槽 0 的合法物品判定
+import com.cyclone.minecraftiot.item.ItemSkill;     // 技能插件物品基类：槽 1 的合法物品判定
+import com.cyclone.minecraftiot.tileentity.TileActuator; // 执行器方块实体（实现了 IInventory，提供槽 0/1）
+import net.minecraft.entity.player.EntityPlayer;   // 玩家（交互判定、Shift 快速转移）
+import net.minecraft.entity.player.InventoryPlayer;// 玩家背包（27 主背包 + 9 快捷栏）
+import net.minecraft.inventory.Container;          // 容器基类：槽位管理、同步、Shift 合并
+import net.minecraft.inventory.Slot;               // 单个物品槽
+import net.minecraft.item.ItemStack;               // 物品堆
 
 /**
- * 执行器容器：2 个槽（绑定卡 + 技能插件）+ 玩家背包。
+ * 执行器容器（服务端/客户端共用的槽位逻辑）。
+ *
+ * 【槽位总览（slotIndex）】
+ *   0      绑定卡槽（TileActuator 内部槽 0），坐标 (126, 6)
+ *   1      技能插件槽（TileActuator 内部槽 1），坐标 (148, 6)
+ *   2..28  玩家主背包 3 排 x 9 列（InventoryPlayer 索引 9..35）
+ *   29..37 玩家快捷栏 1 排 x 9 列（InventoryPlayer 索引 0..8）
+ *
+ * 【坐标体系】
+ *  - Slot 构造参数 (x, y) 是相对 GUI 左上角的像素坐标，与 GuiActuator 底图格子逐像素对齐。
+ *  - 执行器两槽在上半面板第一行（y=6）；玩家背包在贴图下半格子区：
+ *    第 1 列 x=43，列间距 18；四排 y=156 / 174 / 192（主背包）、214（快捷栏）。
+ *  - 贴图已补为 256x256（透明边），drawTexturedModalRect 按 1/256 归一化后 1:1 映射，
+ *    Photoshop 测的格子坐标直接用，无需再换算（否则会出现纵向~11px、横向~2px 拉伸偏移）。
+ *  - 改坐标时务必同步 GuiActuator 的手绘槽框位置（SLOT_CONN_X/SLOT_SKILL_X/SLOT_Y）与贴图格子。
  */
 public class ContainerActuator extends Container {
 
+    // 关联的执行器方块实体（public 供 GuiActuator 直接读取状态/配置）
     public TileActuator tileActuator;
 
+    /**
+     * 构造容器：按布局依次注册全部槽位（注册顺序即 slotIndex）。
+     * @param playerInventory 打开 GUI 的玩家背包
+     * @param tile            被右键打开的执行器方块实体
+     */
     public ContainerActuator(InventoryPlayer playerInventory, TileActuator tile) {
-        this.tileActuator = tile;
-        // 槽 0：绑定卡
-        this.addSlotToContainer(new Slot(tile, 0, 8, 8) {
+        this.tileActuator = tile;                                  // 保存执行器引用
+
+        // -------- 槽 0：绑定卡（连接器），GUI 坐标 (126, 6)，与 GuiActuator 的 SLOT_CONN_X/SLOT_Y 对齐 --------
+        this.addSlotToContainer(new Slot(tile, 0, 126, 6) {
             @Override
             public boolean isItemValid(ItemStack stack) {
+                // 只允许放入连接器（绑定卡）；其余物品拖入会被拒绝
                 return stack != null && stack.getItem() instanceof ItemConnector;
             }
             @Override
-            public int getSlotStackLimit() { return 1; }
+            public int getSlotStackLimit() { return 1; }           // 该槽最多 1 个
         });
-        // 槽 1：技能插件
-        this.addSlotToContainer(new Slot(tile, 1, 8, 32) {
+
+        // -------- 槽 1：技能插件，GUI 坐标 (148, 6)，与 SLOT_SKILL_X/SLOT_Y 对齐 --------
+        this.addSlotToContainer(new Slot(tile, 1, 148, 6) {
             @Override
             public boolean isItemValid(ItemStack stack) {
+                // 只允许放入技能插件（红石插件/物品转移插件等 ItemSkill 子类）
                 return stack != null && stack.getItem() instanceof ItemSkill;
             }
             @Override
-            public int getSlotStackLimit() { return 1; }
+            public int getSlotStackLimit() { return 1; }           // 该槽最多 1 个
         });
-        // 玩家主背包 3x9（GUI 加高后下移）
-        for (int row = 0; row < 3; ++row) {
-            for (int col = 0; col < 9; ++col) {
-                this.addSlotToContainer(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 156 + row * 18));
+
+        // -------- 槽 2..28：玩家主背包 3 排 x 9 列 --------
+        // 贴图格子本体（139 灰、16x16）：第 1 列 x=43、第 1 排 y=156；每向右一格 +18px、每向下一排 +18px
+        for (int row = 0; row < 3; ++row) {                       // row=0,1,2 对应三排
+            for (int col = 0; col < 9; ++col) {                   // col=0..8 对应九列
+                // InventoryPlayer 索引：主背包从 9 开始，索引 = col + row*9 + 9
+                // GUI 坐标：x=43+col*18，y=156+row*18（即 156 / 174 / 192）
+                this.addSlotToContainer(new Slot(playerInventory, col + row * 9 + 9, 43 + col * 18, 156 + row * 18));
             }
         }
-        // 快捷栏 1x9
+
+        // -------- 槽 29..37：快捷栏 1 排 x 9 列（贴图第 4 排格子 y=214） --------
         for (int col = 0; col < 9; ++col) {
-            this.addSlotToContainer(new Slot(playerInventory, col, 8 + col * 18, 214));
+            // InventoryPlayer 索引 0..8 即快捷栏；GUI 坐标 x=43+col*18、y=214
+            this.addSlotToContainer(new Slot(playerInventory, col, 43 + col * 18, 214));
         }
     }
 
+    /**
+     * 容器是否仍可交互（GUI 是否保持打开）。
+     * 本 MOD 的执行器 GUI 允许远程/跨距离访问，故恒返回 true，不做距离检查。
+     */
     @Override
     public boolean canInteractWith(EntityPlayer player) { return true; }
 
+    /**
+     * Shift+点击 快速转移物品。
+     * 规则：
+     *  - 从执行器槽（0/1）拿出 → 尝试塞进玩家背包任意槽（slotIndex 2..37）；
+     *  - 从玩家背包拿出 → 按物品类型自动归入执行器对应槽（连接器→槽0，技能插件→槽1），其他物品不转移。
+     * 返回值为本次移动产生的"结果物品堆"副本（用于客户端动画/同步），未移动返回 null。
+     */
     @Override
     public ItemStack transferStackInSlot(EntityPlayer player, int slotIndex) {
-        ItemStack itemstack = null;
-        Slot slot = (Slot) this.inventorySlots.get(slotIndex);
-        if (slot != null && slot.getHasStack()) {
-            ItemStack itemstack1 = slot.getStack();
-            itemstack = itemstack1.copy();
+        ItemStack itemstack = null;                                // 最终返回的移动结果（初始 null=未移动）
+        Slot slot = (Slot) this.inventorySlots.get(slotIndex);     // 取被 Shift 点击的槽
+        if (slot != null && slot.getHasStack()) {                  // 槽存在且有物品才处理
+            ItemStack itemstack1 = slot.getStack();                // 槽内当前物品堆
+            itemstack = itemstack1.copy();                         // 复制一份作为返回快照
             if (slotIndex < 2) {
-                // 执行器槽 -> 玩家背包
-                if (!this.mergeItemStack(itemstack1, 2, 38, true)) return null;
+                // ===== 来源是执行器槽（0 绑定卡 / 1 插件）→ 移向玩家背包槽 2..37 =====
+                // mergeItemStack(堆, 起始index, 结束index(不含), 反向遍历)；true=从快捷栏向主背包方向找位置
+                if (!this.mergeItemStack(itemstack1, 2, 38, true)) return null; // 无处可放→取消移动
             } else {
-                // 玩家背包 -> 执行器槽（按类型自动分配）
+                // ===== 来源是玩家背包 → 按类型归入执行器槽 =====
                 if (itemstack1.getItem() instanceof ItemConnector) {
+                    // 连接器 → 槽 0（区间 [0,1)）；false=正向放入
                     if (!this.mergeItemStack(itemstack1, 0, 1, false)) return null;
                 } else if (itemstack1.getItem() instanceof ItemSkill) {
+                    // 技能插件 → 槽 1（区间 [1,2)）
                     if (!this.mergeItemStack(itemstack1, 1, 2, false)) return null;
                 } else {
+                    // 其他物品不允许 Shift 进执行器 → 取消
                     return null;
                 }
             }
-            if (itemstack1.stackSize == 0) slot.putStack(null);
-            else slot.onSlotChanged();
+            // 移动后源槽清空则置空，否则刷新槽显示
+            if (itemstack1.stackSize == 0) slot.putStack(null);    // 全部移走：源槽置空
+            else slot.onSlotChanged();                             // 还有剩余：通知槽内容变化
+            // 数量没变说明实际未移动（目标槽满/拒收）→ 返回 null 取消
             if (itemstack1.stackSize == itemstack.stackSize) return null;
-            slot.onPickupFromSlot(player, itemstack1);
+            slot.onPickupFromSlot(player, itemstack1);             // 触发拾取回调（统计/事件等）
         }
-        return itemstack;
+        return itemstack;                                          // 返回移动结果快照（未移动则为 null）
     }
 }

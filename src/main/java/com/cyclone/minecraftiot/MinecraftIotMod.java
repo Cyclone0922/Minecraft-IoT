@@ -12,7 +12,10 @@ import com.cyclone.minecraftiot.item.ItemConnector;
 import com.cyclone.minecraftiot.item.ItemScriptCopier;
 import com.cyclone.minecraftiot.item.ItemSkillItemTransfer;
 import com.cyclone.minecraftiot.item.ItemSkillRedstone;
+import com.cyclone.minecraftiot.network.PacketActuatorBind;
 import com.cyclone.minecraftiot.network.PacketActuatorConfig;
+import com.cyclone.minecraftiot.network.PacketActuatorListData;
+import com.cyclone.minecraftiot.network.PacketActuatorListRequest;
 import com.cyclone.minecraftiot.network.PacketActuatorNbtData;
 import com.cyclone.minecraftiot.network.PacketActuatorNbtRequest;
 import com.cyclone.minecraftiot.network.PacketActuatorSaveAck;
@@ -150,6 +153,9 @@ public class MinecraftIotMod {
         network.registerMessage(PacketActuatorSaveAck.Handler.class, PacketActuatorSaveAck.class, 13, Side.CLIENT); // 执行器保存确认 -> 客户端
         network.registerMessage(PacketRouterListData.Handler.class, PacketRouterListData.class, 14, Side.CLIENT); // 路由器列表 -> 客户端（选择界面）
         network.registerMessage(PacketRouterBind.Handler.class, PacketRouterBind.class, 15, Side.SERVER); // 路由器绑定 -> 服务端
+        network.registerMessage(PacketActuatorListRequest.Handler.class, PacketActuatorListRequest.class, 16, Side.SERVER); // 同网络执行器列表请求 -> 服务端
+        network.registerMessage(PacketActuatorListData.Handler.class, PacketActuatorListData.class, 17, Side.CLIENT); // 同网络执行器列表 -> 客户端（选择界面）
+        network.registerMessage(PacketActuatorBind.Handler.class, PacketActuatorBind.class, 18, Side.SERVER); // 远程执行器绑定 -> 服务端
 
         // Esc 关闭目标机器GUI后返回显示器GUI（ServerTickEvent 发在 FML bus 上）
         FMLCommonHandler.instance().bus().register(new RemoteGuiReturn());
@@ -171,12 +177,13 @@ public class MinecraftIotMod {
         // 跨模组交互等
     }
 
-    /** 客户端主线程钩子：每 tick 泵出待打开的路由器选择浮窗（网络线程只记录，不直接操作 GUI） */
+    /** 客户端主线程钩子：每 tick 泵出待打开的选择浮窗（网络线程只记录，不直接操作 GUI） */
     public static class ClientTickHook {
         @SubscribeEvent
         public void onClientTick(TickEvent.ClientTickEvent event) {
             if (event.phase == TickEvent.Phase.END) {
                 GuiRouterSelect.pump();
+                com.cyclone.minecraftiot.gui.GuiActuatorSelect.pump();
             }
         }
     }

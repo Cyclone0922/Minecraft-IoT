@@ -70,6 +70,11 @@ public class TileActuator extends TileEntity implements IInventory {
     private int routerX, routerY, routerZ, routerDim = Integer.MIN_VALUE;
     private int routerBlocks; // 绑定路由器组的方块数（0 = 旧存档未知，校验时只验证中心）
 
+    // ===== 0.4.1 远程执行器绑定（定向物品转移） =====
+    // 本执行器做 insert() 时，若绑定了同网络内另一个执行器，则从对方 takeBuffer 取物品
+    // （而不是本机 takeBuffer）。典型用法：A 执行器 take() 从相邻箱子取出，B 执行器绑定 A 并 insert() 到目标箱子。
+    private int remoteActX, remoteActY, remoteActZ, remoteActDim = Integer.MIN_VALUE;
+
     private boolean firstTick = true;
 
     public TileActuator() {
@@ -184,6 +189,58 @@ public class TileActuator extends TileEntity implements IInventory {
     public int getRouterDim() { return routerDim; }
     public int getRouterBlocks() { return routerBlocks; }
 
+    // ===== 0.4.1 远程执行器绑定 =====
+
+    /** 是否已绑定远程执行器（落存档坐标有效即视为绑定，实际引用每 tick 校验） */
+    public boolean isRemoteActBound() {
+        return remoteActDim != Integer.MIN_VALUE;
+    }
+
+    public int getRemoteActX() { return remoteActX; }
+    public int getRemoteActY() { return remoteActY; }
+    public int getRemoteActZ() { return remoteActZ; }
+    public int getRemoteActDim() { return remoteActDim; }
+
+    /** 绑定同网络内的远程执行器；传 -1 解绑 */
+    public void setRemoteAct(int x, int y, int z, int dim) {
+        if (x == Integer.MIN_VALUE) {
+            remoteActDim = Integer.MIN_VALUE;
+        } else {
+            remoteActX = x;
+            remoteActY = y;
+            remoteActZ = z;
+            remoteActDim = dim;
+        }
+        markDirty();
+        syncToClient();
+    }
+
+    public void clearRemoteAct() {
+        remoteActDim = Integer.MIN_VALUE;
+        markDirty();
+        syncToClient();
+    }
+
+    /**
+     * 获取绑定的远程执行器 TileEntity（每 tick 校验）：
+     *  - 维度不符 / 坐标无 TileActuator / 路由器组不同（非同网络）→ 视为无效，返回 null
+     *  返回 null 时 doInsert 回退到本机 takeBuffer
+     */
+    public TileActuator getRemoteActuator() {
+        if (!isRemoteActBound()) return null;
+        if (worldObj == null || worldObj.isRemote) return null;
+        if (worldObj.provider.dimensionId != remoteActDim) return null;
+        if (remoteActDim != worldObj.provider.dimensionId) return null;
+        TileEntity te = worldObj.getTileEntity(remoteActX, remoteActY, remoteActZ);
+        if (!(te instanceof TileActuator)) return null;
+        TileActuator other = (TileActuator) te;
+        // 必须同网络：路由器组中心 + 维度一致
+        if (!other.isRouterBound() || !this.isRouterBound()) return null;
+        if (other.getRouterDim() != this.routerDim) return null;
+        if (other.getRouterX() != this.routerX || other.getRouterY() != this.routerY || other.getRouterZ() != this.routerZ) return null;
+        return other;
+    }
+
     // ===== 0.4.0 物品转移：take() / insert() =====
 
     /**
@@ -216,7 +273,10 @@ public class TileActuator extends TileEntity implements IInventory {
     }
 
     /**
-     * insert()：把 takeBuffer 中的物品放入当前面相邻容器。
+     * insert()：把物品放入当前面相邻容器。
+     * 物品源优先级：
+     *   1. 若已绑定同网络远程执行器（isRemoteActBound 且引用有效），从远程 takeBuffer 提取
+     *   2. 否则从本机 takeBuffer 提取（原行为）
      * count < 0 表示尽量放入全部缓存；返回实际放入数量。
      */
     public double doInsert(int side, int count) {
@@ -224,18 +284,26 @@ public class TileActuator extends TileEntity implements IInventory {
         IInventory inv = getAdjacentInventory(side);
         if (inv == null) return 0;
         double moved = 0;
-        Iterator<ItemStack> it = takeBuffer.iterator();
-        while (it.hasNext()) {
-            ItemStack st = it.next();
-            if (st == null || st.stackSize <= 0) { it.remove(); continue; }
-            int want = (count < 0) ? st.stackSize
-                    : (int) Math.min(Math.max(0, count - moved), st.stackSize);
-            if (want <= 0) break;
-            int placed = placeInto(inv, st, want);
-            if (placed <= 0) continue;
-            st.stackSize -= placed;
+        // 确定物品源：远程优先
+        TileActuator remote = getRemoteActuator();
+        // 从源提取一批物品（最多 count 个，-1=全部）到临时列表，再逐个放入 inv
+        int wantTotal = (count < 0) ? Integer.MAX_VALUE : count;
+        List<ItemStack> source;
+        if (remote != null) {
+            source = remote.extractFromTakeBuffer(wantTotal);
+        } else {
+            source = extractFromTakeBuffer(wantTotal);
+        }
+        for (ItemStack st : source) {
+            if (st == null || st.stackSize <= 0) continue;
+            int placed = placeInto(inv, st, st.stackSize);
+            if (placed <= 0) {
+                // 放入失败：把物品退回源缓存（防丢失）
+                if (remote != null) remote.putBackToTakeBuffer(st);
+                else putBackToTakeBuffer(st);
+                continue;
+            }
             moved += placed;
-            if (st.stackSize <= 0) it.remove();
             if (count >= 0 && moved >= count) break;
         }
         if (moved > 0) {
@@ -243,6 +311,38 @@ public class TileActuator extends TileEntity implements IInventory {
             markDirty();
         }
         return moved;
+    }
+
+    /**
+     * 从本机 takeBuffer 提取最多 maxCount 个物品（从缓存移除），返回取出的列表。
+     * 供远程执行器的 doInsert 调用（远程执行器通过 getRemoteActuator() 拿到本实例）。
+     */
+    public List<ItemStack> extractFromTakeBuffer(int maxCount) {
+        List<ItemStack> extracted = new ArrayList<ItemStack>();
+        if (takeBuffer.isEmpty()) return extracted;
+        int remain = maxCount;
+        Iterator<ItemStack> it = takeBuffer.iterator();
+        while (it.hasNext() && remain > 0) {
+            ItemStack st = it.next();
+            if (st == null || st.stackSize <= 0) { it.remove(); continue; }
+            int take = Math.min(remain, st.stackSize);
+            if (take <= 0) break;
+            ItemStack copy = st.copy();
+            copy.stackSize = take;
+            st.stackSize -= take;
+            remain -= take;
+            extracted.add(copy);
+            if (st.stackSize <= 0) it.remove();
+        }
+        if (!extracted.isEmpty()) markDirty();
+        return extracted;
+    }
+
+    /** 把放入失败的物品退回 takeBuffer（doInsert 回滚用） */
+    public void putBackToTakeBuffer(ItemStack stack) {
+        if (stack == null || stack.stackSize <= 0) return;
+        takeBuffer.add(stack.copy());
+        markDirty();
     }
 
     /** 当前面相邻的 IInventory 容器；无则 null */
@@ -697,6 +797,13 @@ public class TileActuator extends TileEntity implements IInventory {
             tag.setInteger("RouterDim", routerDim);
             tag.setInteger("RouterBlocks", routerBlocks);
         }
+        // 0.4.1 远程执行器绑定同步（GUI 状态行显示用）
+        if (isRemoteActBound()) {
+            tag.setInteger("RemoteActX", remoteActX);
+            tag.setInteger("RemoteActY", remoteActY);
+            tag.setInteger("RemoteActZ", remoteActZ);
+            tag.setInteger("RemoteActDim", remoteActDim);
+        }
     }
 
     private void readSyncData(NBTTagCompound tag) {
@@ -714,6 +821,15 @@ public class TileActuator extends TileEntity implements IInventory {
         } else {
             routerDim = Integer.MIN_VALUE;
             routerBlocks = 0;
+        }
+        // 0.4.1 远程执行器绑定同步
+        if (tag.hasKey("RemoteActDim")) {
+            remoteActX = tag.getInteger("RemoteActX");
+            remoteActY = tag.getInteger("RemoteActY");
+            remoteActZ = tag.getInteger("RemoteActZ");
+            remoteActDim = tag.getInteger("RemoteActDim");
+        } else {
+            remoteActDim = Integer.MIN_VALUE;
         }
     }
 
@@ -767,6 +883,13 @@ public class TileActuator extends TileEntity implements IInventory {
             tag.setInteger("RouterDim", routerDim);
             tag.setInteger("RouterBlocks", routerBlocks);
         }
+        // 0.4.1 远程执行器绑定
+        if (isRemoteActBound()) {
+            tag.setInteger("RemoteActX", remoteActX);
+            tag.setInteger("RemoteActY", remoteActY);
+            tag.setInteger("RemoteActZ", remoteActZ);
+            tag.setInteger("RemoteActDim", remoteActDim);
+        }
     }
 
     @Override
@@ -800,6 +923,15 @@ public class TileActuator extends TileEntity implements IInventory {
         } else {
             routerDim = Integer.MIN_VALUE;
             routerBlocks = 0;
+        }
+        // 0.4.1 远程执行器绑定
+        if (tag.hasKey("RemoteActDim")) {
+            remoteActX = tag.getInteger("RemoteActX");
+            remoteActY = tag.getInteger("RemoteActY");
+            remoteActZ = tag.getInteger("RemoteActZ");
+            remoteActDim = tag.getInteger("RemoteActDim");
+        } else {
+            remoteActDim = Integer.MIN_VALUE;
         }
     }
 }
