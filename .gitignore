@@ -7,6 +7,7 @@
 /assets/
 /assets.rar
 /META-INF/
+/docs/
 
 # ===== 运行目录（存档、mods、配置、日志、资源包） =====
 /run/
@@ -44,4 +45,4 @@ GradleStartServer.java
 # 个人开发日记（不提交到仓库）
 /开发日记.txt
 /DEVELOPMENT_PLAN.md
-/高版本移植规划.md
+/docs/高版本移植规划.md

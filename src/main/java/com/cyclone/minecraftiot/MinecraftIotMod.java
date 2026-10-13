@@ -1,6 +1,7 @@
 package com.cyclone.minecraftiot;
 
 import com.cyclone.minecraftiot.block.BlockActuator;
+import com.cyclone.minecraftiot.block.BlockItemBuffer;
 import com.cyclone.minecraftiot.block.BlockSignalBus;
 import com.cyclone.minecraftiot.block.BlockConnectorWorkbench;
 import com.cyclone.minecraftiot.block.BlockDisplay;
@@ -21,6 +22,7 @@ import com.cyclone.minecraftiot.network.PacketActuatorNbtRequest;
 import com.cyclone.minecraftiot.network.PacketActuatorSaveAck;
 import com.cyclone.minecraftiot.network.PacketBindConnector;
 import com.cyclone.minecraftiot.network.PacketDisplayData;
+import com.cyclone.minecraftiot.network.PacketItemBufferData;
 import com.cyclone.minecraftiot.network.PacketOpenRemoteGui;
 import com.cyclone.minecraftiot.network.PacketRouterBind;
 import com.cyclone.minecraftiot.network.PacketRouterListData;
@@ -35,6 +37,7 @@ import com.cyclone.minecraftiot.network.RemoteGuiReturn;
 import com.cyclone.minecraftiot.tileentity.TileActuator;
 import com.cyclone.minecraftiot.tileentity.TileConnectorWorkbench;
 import com.cyclone.minecraftiot.tileentity.TileDisplay;
+import com.cyclone.minecraftiot.tileentity.TileItemBuffer;
 import com.cyclone.minecraftiot.tileentity.TileRouter;
 import com.cyclone.minecraftiot.tileentity.TileSensor;
 import com.cyclone.minecraftiot.tileentity.TileSignalBus;
@@ -81,6 +84,7 @@ public class MinecraftIotMod {
     public static Block routerBlock;
     public static Block workbenchBlock;
     public static Block signalBusBlock;
+    public static Block itemBufferBlock;
     public static Item connectorItem;
     public static Item skillRedstoneItem;
     public static Item skillItemTransferItem;
@@ -115,6 +119,10 @@ public class MinecraftIotMod {
         signalBusBlock = new BlockSignalBus().setBlockName("signal_bus").setCreativeTab(CreativeTabs.tabMisc);
         GameRegistry.registerBlock(signalBusBlock, "signal_bus");
 
+        // 0.5.0 新方块：物品缓存器（网络存储器，只读 GUI）
+        itemBufferBlock = new BlockItemBuffer().setBlockName("item_buffer").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(itemBufferBlock, "item_buffer");
+
         // P1 新物品：红石技能插件
         skillRedstoneItem = new ItemSkillRedstone().setUnlocalizedName("skill_redstone");
         GameRegistry.registerItem(skillRedstoneItem, "skill_redstone");
@@ -135,6 +143,7 @@ public class MinecraftIotMod {
         GameRegistry.registerTileEntity(TileRouter.class, "minecraftiot:TileRouter");
         GameRegistry.registerTileEntity(TileConnectorWorkbench.class, "minecraftiot:TileConnectorWorkbench");
         GameRegistry.registerTileEntity(TileSignalBus.class, "minecraftiot:TileSignalBus");
+        GameRegistry.registerTileEntity(TileItemBuffer.class, "minecraftiot:TileItemBuffer");
 
         // 注册网络包
         network.registerMessage(PacketDisplayData.Handler.class, PacketDisplayData.class, 0, Side.CLIENT);   // 显示屏数据 -> 客户端
@@ -156,6 +165,7 @@ public class MinecraftIotMod {
         network.registerMessage(PacketActuatorListRequest.Handler.class, PacketActuatorListRequest.class, 16, Side.SERVER); // 同网络执行器列表请求 -> 服务端
         network.registerMessage(PacketActuatorListData.Handler.class, PacketActuatorListData.class, 17, Side.CLIENT); // 同网络执行器列表 -> 客户端（选择界面）
         network.registerMessage(PacketActuatorBind.Handler.class, PacketActuatorBind.class, 18, Side.SERVER); // 远程执行器绑定 -> 服务端
+        network.registerMessage(PacketItemBufferData.Handler.class, PacketItemBufferData.class, 19, Side.CLIENT); // 缓存器池快照 -> 客户端
 
         // Esc 关闭目标机器GUI后返回显示器GUI（ServerTickEvent 发在 FML bus 上）
         FMLCommonHandler.instance().bus().register(new RemoteGuiReturn());

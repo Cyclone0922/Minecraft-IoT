@@ -160,6 +160,37 @@ public class TileActuator extends TileEntity implements IInventory {
         return ((ItemSkill) skillStack.getItem()).getSkillName();
     }
 
+    // ===== 0.5.0 网络物品池接入 =====
+
+    /**
+     * 解析本执行器绑定的路由器组主控 TileRouter（0.5.0 物品池核心）。
+     * 未绑定 / 组非法（被拆散）/ 本执行器在灾备网络 返回 null。
+     */
+    public TileRouter getRouterMaster() {
+        if (worldObj == null || worldObj.isRemote) return null;
+        if (!isRouterBound()) return null;
+        com.cyclone.minecraftiot.util.RouterCluster rc =
+                com.cyclone.minecraftiot.util.RouterCluster.resolve(worldObj, routerX, routerY, routerZ);
+        return TileRouter.masterOf(rc, worldObj);
+    }
+
+    /**
+     * 纯单机物品转移模式判断：未绑定远程执行器、且除当前面外无其他输出动作（条件/输出表达式均为空）。
+     * 满足时 take() 从相邻容器取物入网络池、insert() 从网络池取物放相邻容器；
+     * 不满足则沿用 0.4.1 语义（本机/远程 takeBuffer）。
+     */
+    public boolean isStandaloneItemMode(int side) {
+        if (isRemoteActBound()) return false;
+        if (side < 0 || side >= 6) return false;
+        for (int i = 0; i < 6; i++) {
+            if (i == side) continue;
+            String o = getOutputExpr(i);
+            String c = getCondition(i);
+            if ((o != null && !o.isEmpty()) || (c != null && !c.isEmpty())) return false;
+        }
+        return true;
+    }
+
     // ===== 路由器组网 =====
 
     public boolean isRouterBound() {
@@ -244,7 +275,10 @@ public class TileActuator extends TileEntity implements IInventory {
     // ===== 0.4.0 物品转移：take() / insert() =====
 
     /**
-     * take()：从当前面（求值面=输出面）相邻容器取出物品，存入 takeBuffer。
+     * take()：从当前面（求值面=输出面）相邻容器取出物品。
+     * 0.5.0 语义：
+     *  - 纯单机物品转移模式（未绑远程执行器 + 无其他面输出）：取出物品直接放入网络物品池
+     *  - 否则：存入本机 takeBuffer（0.4.0/0.4.1 原行为）
      * count < 0 表示全部取出；返回实际取出物品数量（可作表达式值）。
      * 未安装物品转移插件或相邻无容器时返回 0。
      */
@@ -252,6 +286,44 @@ public class TileActuator extends TileEntity implements IInventory {
         if (!hasItemTransferSkill()) return 0;
         IInventory inv = getAdjacentInventory(side);
         if (inv == null) return 0;
+
+        // ===== 0.5.0 网络池模式 =====
+        if (isStandaloneItemMode(side)) {
+            TileRouter master = getRouterMaster();
+            if (master == null || master.isDrMode()) return 0; // 组非法/灾备：池不可用
+            double moved = 0;
+            for (int i = 0; i < inv.getSizeInventory(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack == null || stack.stackSize <= 0) continue;
+                int want = (count < 0) ? stack.stackSize
+                        : (int) Math.min(Math.max(0, count - moved), stack.stackSize);
+                if (want <= 0) break;
+                ItemStack taken = inv.decrStackSize(i, want);
+                if (taken == null || taken.stackSize <= 0) continue;
+                int put = master.addItemStack(taken, taken.stackSize);
+                if (put <= 0) {
+                    // 池满：剩余放回容器原槽，停止本批
+                    if (taken.stackSize > 0) inv.setInventorySlotContents(i, taken);
+                    break;
+                }
+                moved += put;
+                if (taken.stackSize > put) {
+                    // 部分放入：剩余放回原槽
+                    ItemStack rest = taken.copy();
+                    rest.stackSize = taken.stackSize - put;
+                    inv.setInventorySlotContents(i, rest);
+                    break;
+                }
+                if (count >= 0 && moved >= count) break;
+            }
+            if (moved > 0) {
+                if (inv instanceof TileEntity) ((TileEntity) inv).markDirty();
+                markDirty();
+            }
+            return moved;
+        }
+
+        // ===== 原：本机 takeBuffer =====
         double moved = 0;
         for (int i = 0; i < inv.getSizeInventory(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
@@ -274,16 +346,51 @@ public class TileActuator extends TileEntity implements IInventory {
 
     /**
      * insert()：把物品放入当前面相邻容器。
-     * 物品源优先级：
-     *   1. 若已绑定同网络远程执行器（isRemoteActBound 且引用有效），从远程 takeBuffer 提取
-     *   2. 否则从本机 takeBuffer 提取（原行为）
-     * count < 0 表示尽量放入全部缓存；返回实际放入数量。
+     * 0.5.0 语义：
+     *  - 纯单机物品转移模式（未绑远程执行器 + 无其他面输出）：物品源=网络物品池
+     *  - 否则：物品源优先级 = 远程 takeBuffer > 本机 takeBuffer（0.4.1 原行为）
+     * count < 0 表示尽量放入全部；返回实际放入数量。
      */
     public double doInsert(int side, int count) {
         if (!hasItemTransferSkill()) return 0;
         IInventory inv = getAdjacentInventory(side);
         if (inv == null) return 0;
         double moved = 0;
+
+        // ===== 0.5.0 网络池模式 =====
+        if (isStandaloneItemMode(side)) {
+            TileRouter master = getRouterMaster();
+            if (master == null || master.isDrMode()) return 0; // 组非法/灾备：池不可用
+            int guard = 0;
+            while (guard++ < 100) {
+                java.util.List<Object[]> pairs = master.getPool().snapshotPairs();
+                if (pairs.isEmpty()) break;
+                ItemStack sample = (ItemStack) pairs.get(pairs.size() - 1)[0]; // 取最后一种
+                if (sample == null || sample.stackSize <= 0) { break; }
+                java.util.List<ItemStack> got = master.extractItemStack(sample, sample.stackSize);
+                int movedBatch = 0;
+                for (ItemStack st : got) {
+                    if (st == null || st.stackSize <= 0) continue;
+                    int placed = placeInto(inv, st, st.stackSize);
+                    if (placed <= 0) {
+                        master.addItemStack(st, st.stackSize); // 放不进：退回池
+                        continue;
+                    }
+                    movedBatch += placed;
+                    moved += placed;
+                    if (count >= 0 && moved >= count) break;
+                }
+                if (movedBatch <= 0) break; // 这一种完全放不进（容器满），停止
+                if (count >= 0 && moved >= count) break;
+            }
+            if (moved > 0) {
+                if (inv instanceof TileEntity) ((TileEntity) inv).markDirty();
+                markDirty();
+            }
+            return moved;
+        }
+
+        // ===== 原：远程/本机 takeBuffer =====
         // 确定物品源：远程优先
         TileActuator remote = getRemoteActuator();
         // 从源提取一批物品（最多 count 个，-1=全部）到临时列表，再逐个放入 inv

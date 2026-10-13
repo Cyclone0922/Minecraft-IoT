@@ -3,6 +3,7 @@ package com.cyclone.minecraftiot.gui;
 import com.cyclone.minecraftiot.tileentity.TileActuator;
 import com.cyclone.minecraftiot.tileentity.TileConnectorWorkbench;
 import com.cyclone.minecraftiot.tileentity.TileDisplay;
+import com.cyclone.minecraftiot.tileentity.TileItemBuffer;
 import com.cyclone.minecraftiot.tileentity.TileSensor;
 import com.cyclone.minecraftiot.util.DisplayGroupUtil;
 import cpw.mods.fml.common.network.IGuiHandler;
@@ -19,6 +20,7 @@ public class GuiHandler implements IGuiHandler {
     public static final int GUI_REMOTE = 2;
     public static final int GUI_ACTUATOR = 3;
     public static final int GUI_WORKBENCH = 4;
+    public static final int GUI_ITEM_BUFFER = 5;
 
     /**
      * 解析任意显示块所属组的"主控"TileDisplay。
@@ -67,6 +69,11 @@ public class GuiHandler implements IGuiHandler {
                     return new ContainerConnectorWorkbench(player.inventory, (TileConnectorWorkbench) te);
                 }
                 break;
+            case GUI_ITEM_BUFFER:
+                if (te instanceof TileItemBuffer) {
+                    return new ContainerItemBuffer(player.inventory, (TileItemBuffer) te);
+                }
+                break;
         }
         return null;
     }
@@ -99,6 +106,11 @@ public class GuiHandler implements IGuiHandler {
             case GUI_WORKBENCH:
                 if (te instanceof TileConnectorWorkbench) {
                     return new GuiConnectorWorkbench(new ContainerConnectorWorkbench(player.inventory, (TileConnectorWorkbench) te), (TileConnectorWorkbench) te);
+                }
+                break;
+            case GUI_ITEM_BUFFER:
+                if (te instanceof TileItemBuffer) {
+                    return new GuiItemBuffer(new ContainerItemBuffer(player.inventory, (TileItemBuffer) te));
                 }
                 break;
         }
