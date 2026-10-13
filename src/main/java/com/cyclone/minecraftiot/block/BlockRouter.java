@@ -56,12 +56,7 @@ public class BlockRouter extends Block {
         if (!world.isRemote) {
             TileEntity te = world.getTileEntity(x, y, z);
             if (te instanceof TileRouter) {
-                TileRouter r = (TileRouter) te;
-                MinecraftIotMod.log.info("[Router@" + x + "," + y + "," + z + "]"
-                        + " mac=" + r.getMac()
-                        + " alias=" + r.getAlias()
-                        + " IE=" + r.getEnergy().getIe() + "/" + r.getEnergy().getIeCapacity()
-                        + " pool=" + r.getPool().getTotal() + "/" + r.getPoolItemCapacity());
+                player.openGui(MinecraftIotMod.instance, 6, world, x, y, z);
             }
         }
         return true;

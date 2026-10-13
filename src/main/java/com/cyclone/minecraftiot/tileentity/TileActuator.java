@@ -66,6 +66,9 @@ public class TileActuator extends TileEntity implements IInventory {
     // ===== 0.4.0 物品转移（服务端运行时） =====
     private List<ItemStack> takeBuffer = new ArrayList<ItemStack>(); // take() 取出的物品缓存，供 insert() 放入（落 NBT 防重启丢失）
 
+    // ===== 0.5.1 物品转移节流（服务端运行时，不落 NBT） =====
+    private int transferCooldown = 0; // >0 时禁止转移，递减到 0 才允许下一次（每 8t 1 个物品）
+
     // ===== 路由器组网（落存档） =====
     private int routerX, routerY, routerZ, routerDim = Integer.MIN_VALUE;
     private int routerBlocks; // 绑定路由器组的方块数（0 = 旧存档未知，校验时只验证中心）
@@ -287,36 +290,40 @@ public class TileActuator extends TileEntity implements IInventory {
         IInventory inv = getAdjacentInventory(side);
         if (inv == null) return 0;
 
-        // ===== 0.5.0 网络池模式 =====
+        // ===== 0.5.0 网络池模式（0.5.1 加节流+耗能，每次最多移 1 个物品） =====
         if (isStandaloneItemMode(side)) {
             TileRouter master = getRouterMaster();
-            if (master == null || master.isDrMode()) return 0; // 组非法/灾备：池不可用
-            double moved = 0;
-            for (int i = 0; i < inv.getSizeInventory(); i++) {
+            if (master == null || master.isDrMode()) return 0;
+            if (transferCooldown > 0) return 0;
+            int dist = Math.abs(xCoord - master.xCoord) + Math.abs(yCoord - master.yCoord) + Math.abs(zCoord - master.zCoord);
+            double cost = TileRouter.costPerItem(dist);
+            int moved = 0;
+            for (int i = 0; i < inv.getSizeInventory() && moved == 0; i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack == null || stack.stackSize <= 0) continue;
-                int want = (count < 0) ? stack.stackSize
-                        : (int) Math.min(Math.max(0, count - moved), stack.stackSize);
-                if (want <= 0) break;
-                ItemStack taken = inv.decrStackSize(i, want);
-                if (taken == null || taken.stackSize <= 0) continue;
+                // 先查能量：不够就不取物品（避免 decrStackSize 后放回覆盖原槽）
+                if (!master.requestEnergy(cost)) break;
+                ItemStack taken = inv.decrStackSize(i, 1);
+                if (taken == null || taken.stackSize <= 0) {
+                    master.acceptEnergy(cost); // 取不到物品，退回能量
+                    continue;
+                }
                 int put = master.addItemStack(taken, taken.stackSize);
                 if (put <= 0) {
-                    // 池满：剩余放回容器原槽，停止本批
-                    if (taken.stackSize > 0) inv.setInventorySlotContents(i, taken);
+                    // 池满：物品放回原槽位（合并），退回能量
+                    master.acceptEnergy(cost);
+                    mergeIntoSlot(inv, i, taken);
                     break;
                 }
                 moved += put;
                 if (taken.stackSize > put) {
-                    // 部分放入：剩余放回原槽
                     ItemStack rest = taken.copy();
                     rest.stackSize = taken.stackSize - put;
-                    inv.setInventorySlotContents(i, rest);
-                    break;
+                    mergeIntoSlot(inv, i, rest);
                 }
-                if (count >= 0 && moved >= count) break;
             }
             if (moved > 0) {
+                transferCooldown = TileRouter.TRANSFER_INTERVAL_TICKS;
                 if (inv instanceof TileEntity) ((TileEntity) inv).markDirty();
                 markDirty();
             }
@@ -357,37 +364,42 @@ public class TileActuator extends TileEntity implements IInventory {
         if (inv == null) return 0;
         double moved = 0;
 
-        // ===== 0.5.0 网络池模式 =====
+        // ===== 0.5.0 网络池模式（0.5.1 加节流+耗能，每次最多移 1 个物品） =====
         if (isStandaloneItemMode(side)) {
             TileRouter master = getRouterMaster();
-            if (master == null || master.isDrMode()) return 0; // 组非法/灾备：池不可用
-            int guard = 0;
-            while (guard++ < 100) {
-                java.util.List<Object[]> pairs = master.getPool().snapshotPairs();
-                if (pairs.isEmpty()) break;
-                ItemStack sample = (ItemStack) pairs.get(pairs.size() - 1)[0]; // 取最后一种
-                if (sample == null || sample.stackSize <= 0) { break; }
-                java.util.List<ItemStack> got = master.extractItemStack(sample, sample.stackSize);
-                int movedBatch = 0;
-                for (ItemStack st : got) {
-                    if (st == null || st.stackSize <= 0) continue;
-                    int placed = placeInto(inv, st, st.stackSize);
-                    if (placed <= 0) {
-                        master.addItemStack(st, st.stackSize); // 放不进：退回池
-                        continue;
+            if (master == null || master.isDrMode()) return 0;
+            if (transferCooldown > 0) return 0;
+            int dist = Math.abs(xCoord - master.xCoord) + Math.abs(yCoord - master.yCoord) + Math.abs(zCoord - master.zCoord);
+            double cost = TileRouter.costPerItem(dist);
+            int netMoved = 0;
+            java.util.List<Object[]> pairs = master.getPool().snapshotPairs();
+            if (!pairs.isEmpty()) {
+                ItemStack sample = (ItemStack) pairs.get(pairs.size() - 1)[0];
+                if (sample != null && sample.stackSize > 0) {
+                    // 先查能量：够了才从池取物品
+                    if (master.requestEnergy(cost)) {
+                        java.util.List<ItemStack> got = master.extractItemStack(sample, 1);
+                        for (ItemStack st : got) {
+                            if (st == null || st.stackSize <= 0) continue;
+                            int placed = placeInto(inv, st, st.stackSize);
+                            if (placed <= 0) {
+                                master.addItemStack(st, st.stackSize); // 放不进退回池
+                                continue;
+                            }
+                            netMoved += placed;
+                        }
+                        if (netMoved == 0) {
+                            master.acceptEnergy(cost); // 没放进去，退回能量
+                        }
                     }
-                    movedBatch += placed;
-                    moved += placed;
-                    if (count >= 0 && moved >= count) break;
                 }
-                if (movedBatch <= 0) break; // 这一种完全放不进（容器满），停止
-                if (count >= 0 && moved >= count) break;
             }
-            if (moved > 0) {
+            if (netMoved > 0) {
+                transferCooldown = TileRouter.TRANSFER_INTERVAL_TICKS;
                 if (inv instanceof TileEntity) ((TileEntity) inv).markDirty();
                 markDirty();
             }
-            return moved;
+            return netMoved;
         }
 
         // ===== 原：远程/本机 takeBuffer =====
@@ -461,6 +473,17 @@ public class TileActuator extends TileEntity implements IInventory {
         return (te instanceof IInventory) ? (IInventory) te : null;
     }
 
+    /** 把 stack 合并到 inv 的第 slot 槽位（不覆盖，累加） */
+    private static void mergeIntoSlot(IInventory inv, int slot, ItemStack stack) {
+        ItemStack orig = inv.getStackInSlot(slot);
+        if (orig == null) {
+            inv.setInventorySlotContents(slot, stack);
+        } else {
+            orig.stackSize += stack.stackSize;
+            inv.setInventorySlotContents(slot, orig);
+        }
+    }
+
     /** 尝试把 stack 的 want 个放入容器：先堆叠同物品槽，再找空槽；返回实际放入数 */
     private int placeInto(IInventory inv, ItemStack stack, int want) {
         int limit = Math.max(1, Math.min(inv.getInventoryStackLimit(), stack.getMaxStackSize()));
@@ -532,6 +555,7 @@ public class TileActuator extends TileEntity implements IInventory {
     @Override
     public void updateEntity() {
         if (worldObj.isRemote) return;
+        if (transferCooldown > 0) transferCooldown--;
         if (firstTick || worldObj.getTotalWorldTime() % SIGNAL_INTERVAL == 0) {
             firstTick = false;
             signalTick(); // 技能0 信号域：每 2t（红石刻）

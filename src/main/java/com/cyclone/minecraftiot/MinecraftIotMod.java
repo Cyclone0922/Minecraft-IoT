@@ -23,6 +23,7 @@ import com.cyclone.minecraftiot.network.PacketActuatorSaveAck;
 import com.cyclone.minecraftiot.network.PacketBindConnector;
 import com.cyclone.minecraftiot.network.PacketDisplayData;
 import com.cyclone.minecraftiot.network.PacketItemBufferData;
+import com.cyclone.minecraftiot.network.PacketRouterCharge;
 import com.cyclone.minecraftiot.network.PacketOpenRemoteGui;
 import com.cyclone.minecraftiot.network.PacketRouterBind;
 import com.cyclone.minecraftiot.network.PacketRouterListData;
@@ -166,6 +167,7 @@ public class MinecraftIotMod {
         network.registerMessage(PacketActuatorListData.Handler.class, PacketActuatorListData.class, 17, Side.CLIENT); // 同网络执行器列表 -> 客户端（选择界面）
         network.registerMessage(PacketActuatorBind.Handler.class, PacketActuatorBind.class, 18, Side.SERVER); // 远程执行器绑定 -> 服务端
         network.registerMessage(PacketItemBufferData.Handler.class, PacketItemBufferData.class, 19, Side.CLIENT); // 缓存器池快照 -> 客户端
+        network.registerMessage(PacketRouterCharge.Handler.class, PacketRouterCharge.class, 20, Side.SERVER); // 路由器充电 -> 服务端
 
         // Esc 关闭目标机器GUI后返回显示器GUI（ServerTickEvent 发在 FML bus 上）
         FMLCommonHandler.instance().bus().register(new RemoteGuiReturn());

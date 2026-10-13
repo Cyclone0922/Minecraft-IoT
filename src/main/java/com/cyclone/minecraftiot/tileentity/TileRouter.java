@@ -32,8 +32,9 @@ import java.util.List;
 public class TileRouter extends TileEntity {
 
     private static final int SCAN_INTERVAL = 40;
+    private static final double IE_CAP_PER_BLOCK = 10000.0; // 每块路由器贡献 10000 IE 容量
 
-    private final EnergyDualTrack energy = new EnergyDualTrack(10000);
+    private final EnergyDualTrack energy = new EnergyDualTrack(IE_CAP_PER_BLOCK);
     private String mac = null;       // 出厂生成，固定
     private String alias = "";        // 玩家可配置别名
     private int level = 1;            // 路由器等级（P1 固定 1）
@@ -44,6 +45,32 @@ public class TileRouter extends TileEntity {
     private boolean firstTick = true;
 
     public TileRouter() {}
+
+    /**
+     * 返回本组主控 TileRouter（下东南角 = maxX, minY, maxZ）。
+     * 能量/物品池集中存在主控上；任意方块调用此方法转发到主控。
+     * 组非法（null）时返回自身兜底。
+     */
+    public TileRouter getMaster() {
+        RouterCluster c = RouterCluster.resolve(worldObj, xCoord, yCoord, zCoord);
+        if (c == null) return this;
+        TileEntity te = worldObj.getTileEntity(c.cx, c.cy, c.cz);
+        if (te instanceof TileRouter) return (TileRouter) te;
+        return this;
+    }
+
+    /** 是否是本组主控（下东南角） */
+    public boolean isMaster() {
+        RouterCluster c = RouterCluster.resolve(worldObj, xCoord, yCoord, zCoord);
+        if (c == null) return true; // 非法组：自身即主控
+        return xCoord == c.cx && yCoord == c.cy && zCoord == c.cz;
+    }
+
+    /** 本组块数（主控用它算能量容量） */
+    public int getBlockCount() {
+        RouterCluster c = RouterCluster.resolve(worldObj, xCoord, yCoord, zCoord);
+        return c == null ? 1 : c.blockCount;
+    }
 
     /** 懒生成 MAC：第一次读取时如果还没有就生成一个 */
     public String getMac() {
@@ -63,22 +90,57 @@ public class TileRouter extends TileEntity {
 
     public int getLevel() { return level; }
 
-    public EnergyDualTrack getEnergy() { return energy; }
+    /** 返回主控的能量字段（任意方块都转发） */
+    public EnergyDualTrack getEnergy() { return getMaster().energy; }
 
     /** 供外部能量输入调用：amount 为外部能量单位，1:1 转 IE，返回实际转入量 */
     public double acceptEnergy(double amount) {
-        double got = energy.addIe(amount);
-        if (got > 0) markDirty();
+        TileRouter m = getMaster();
+        // 同步容量 = 块数 × 每块容量
+        m.energy.setIeCapacity(m.getBlockCount() * IE_CAP_PER_BLOCK);
+        double got = m.energy.addIe(amount);
+        if (got > 0) {
+            m.markDirty();
+            if (m.worldObj != null) m.worldObj.markBlockForUpdate(m.xCoord, m.yCoord, m.zCoord);
+        }
         return got;
     }
 
     /** 设备请求消耗 IE（执行器等调用），返回是否成功 */
     public boolean requestEnergy(double amount) {
-        if (energy.consumeIe(amount)) {
-            markDirty();
+        TileRouter m = getMaster();
+        m.energy.setIeCapacity(m.getBlockCount() * IE_CAP_PER_BLOCK);
+        if (m.energy.consumeIe(amount)) {
+            m.markDirty();
+            if (m.worldObj != null) m.worldObj.markBlockForUpdate(m.xCoord, m.yCoord, m.zCoord);
             return true;
         }
         return false;
+    }
+
+    // ===== 0.5.1 物品转移耗能 =====
+    /** 基础耗能（IE/物品） */
+    public static final double BASE_COST_PER_ITEM = 5.0;
+    /** 每多 16 格距离追加耗能（IE/物品） */
+    public static final double DIST_COST_PER_16 = 2.0;
+    /** 速度：每 8 tick 转移 1 个物品（=2.5 物品/秒） */
+    public static final int TRANSFER_INTERVAL_TICKS = 8;
+
+    /** 计算执行器到路由器主控 distBlock 格时，单件物品转移耗能 */
+    public static double costPerItem(int distBlock) {
+        return BASE_COST_PER_ITEM + DIST_COST_PER_16 * Math.floor(distBlock / 16.0);
+    }
+
+    /** 测试用：直接给路由器充 IE（GUI 输入框调用，转发到主控） */
+    public double chargeIe(double amount) {
+        TileRouter m = getMaster();
+        m.energy.setIeCapacity(m.getBlockCount() * IE_CAP_PER_BLOCK);
+        double got = m.energy.addIe(amount);
+        if (got > 0) {
+            m.markDirty();
+            if (m.worldObj != null) m.worldObj.markBlockForUpdate(m.xCoord, m.yCoord, m.zCoord);
+        }
+        return got;
     }
 
     // ===== 0.5.0 物品池访问 =====
@@ -231,6 +293,21 @@ public class TileRouter extends TileEntity {
         if (tag.hasKey("Level")) level = tag.getInteger("Level");
         pool.readFromNBT(tag, "Net");
         drMode = tag.getBoolean("DrMode");
+    }
+
+    // ===== 0.5.1 客户端同步（IE 显示） =====
+    @Override
+    public net.minecraft.network.Packet getDescriptionPacket() {
+        TileRouter m = getMaster();
+        NBTTagCompound tag = new NBTTagCompound();
+        m.energy.writeToNBT(tag, "Router");
+        return new net.minecraft.network.play.server.S35PacketUpdateTileEntity(m.xCoord, m.yCoord, m.zCoord, 1, tag);
+    }
+
+    @Override
+    public void onDataPacket(net.minecraft.network.NetworkManager net, net.minecraft.network.play.server.S35PacketUpdateTileEntity pkt) {
+        TileRouter m = getMaster();
+        m.energy.readFromNBT(pkt.func_148857_g(), "Router");
     }
 }
 
