@@ -13,7 +13,7 @@ public class ItemSkillItemTransfer extends ItemSkill {
 
     public ItemSkillItemTransfer() {
         super(SKILL_ID);
-        setUnlocalizedName("skill_item_transfer");
+        setUnlocalizedName("mciot_skill_item_transfer");
         setTextureName("minecraftiot:skill_item_transfer");
     }
 

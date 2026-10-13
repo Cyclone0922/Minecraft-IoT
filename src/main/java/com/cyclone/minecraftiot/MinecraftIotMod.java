@@ -98,43 +98,43 @@ public class MinecraftIotMod {
         // 此处不再加载 DisplayFormatConfig。
 
         // 注册方块、物品
-        sensorBlock = new BlockSensor().setBlockName("sensor").setCreativeTab(CreativeTabs.tabMisc);
-        GameRegistry.registerBlock(sensorBlock, "sensor");
-        displayBlock = new BlockDisplay().setBlockName("display").setCreativeTab(CreativeTabs.tabMisc);
-        GameRegistry.registerBlock(displayBlock, "display");
-        connectorItem = new ItemConnector().setUnlocalizedName("connector");
-        GameRegistry.registerItem(connectorItem, "connector");
+        sensorBlock = new BlockSensor().setBlockName("mciot_sensor").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(sensorBlock, "mciot_sensor");
+        displayBlock = new BlockDisplay().setBlockName("mciot_display").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(displayBlock, "mciot_display");
+        connectorItem = new ItemConnector().setUnlocalizedName("mciot_connector");
+        GameRegistry.registerItem(connectorItem, "mciot_connector");
         connectorItem.setCreativeTab(CreativeTabs.tabMisc);
 
         // P1 新方块：执行器、路由器
-        actuatorBlock = new BlockActuator().setBlockName("actuator").setCreativeTab(CreativeTabs.tabMisc);
-        GameRegistry.registerBlock(actuatorBlock, "actuator");
-        routerBlock = new BlockRouter().setBlockName("router").setCreativeTab(CreativeTabs.tabMisc);
-        GameRegistry.registerBlock(routerBlock, "router");
+        actuatorBlock = new BlockActuator().setBlockName("mciot_actuator").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(actuatorBlock, "mciot_actuator");
+        routerBlock = new BlockRouter().setBlockName("mciot_router").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(routerBlock, "mciot_router");
 
         // 连接器工作台（配置进卡架构核心方块）
-        workbenchBlock = new BlockConnectorWorkbench().setBlockName("connector_workbench").setCreativeTab(CreativeTabs.tabMisc);
-        GameRegistry.registerBlock(workbenchBlock, "connector_workbench");
+        workbenchBlock = new BlockConnectorWorkbench().setBlockName("mciot_connector_workbench").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(workbenchBlock, "mciot_connector_workbench");
 
         // 技能0 信号总线（方向直通中继）
-        signalBusBlock = new BlockSignalBus().setBlockName("signal_bus").setCreativeTab(CreativeTabs.tabMisc);
-        GameRegistry.registerBlock(signalBusBlock, "signal_bus");
+        signalBusBlock = new BlockSignalBus().setBlockName("mciot_signal_bus").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(signalBusBlock, "mciot_signal_bus");
 
         // 0.5.0 新方块：物品缓存器（网络存储器，只读 GUI）
-        itemBufferBlock = new BlockItemBuffer().setBlockName("item_buffer").setCreativeTab(CreativeTabs.tabMisc);
-        GameRegistry.registerBlock(itemBufferBlock, "item_buffer");
+        itemBufferBlock = new BlockItemBuffer().setBlockName("mciot_item_buffer").setCreativeTab(CreativeTabs.tabMisc);
+        GameRegistry.registerBlock(itemBufferBlock, "mciot_item_buffer");
 
         // P1 新物品：红石技能插件
-        skillRedstoneItem = new ItemSkillRedstone().setUnlocalizedName("skill_redstone");
-        GameRegistry.registerItem(skillRedstoneItem, "skill_redstone");
+        skillRedstoneItem = new ItemSkillRedstone().setUnlocalizedName("mciot_skill_redstone");
+        GameRegistry.registerItem(skillRedstoneItem, "mciot_skill_redstone");
         skillRedstoneItem.setCreativeTab(CreativeTabs.tabMisc);
 
         // 0.4.0 新物品：物品转移技能插件、脚本拷贝器
-        skillItemTransferItem = new ItemSkillItemTransfer().setUnlocalizedName("skill_item_transfer");
-        GameRegistry.registerItem(skillItemTransferItem, "skill_item_transfer");
+        skillItemTransferItem = new ItemSkillItemTransfer().setUnlocalizedName("mciot_skill_item_transfer");
+        GameRegistry.registerItem(skillItemTransferItem, "mciot_skill_item_transfer");
         skillItemTransferItem.setCreativeTab(CreativeTabs.tabMisc);
-        scriptCopierItem = new ItemScriptCopier().setUnlocalizedName("script_copier");
-        GameRegistry.registerItem(scriptCopierItem, "script_copier");
+        scriptCopierItem = new ItemScriptCopier().setUnlocalizedName("mciot_script_copier");
+        GameRegistry.registerItem(scriptCopierItem, "mciot_script_copier");
         scriptCopierItem.setCreativeTab(CreativeTabs.tabMisc);
 
         // 注册TileEntity（id 带 mod 前缀，避免与其他 mod 的通用短 id 冲突，如 "TileSensor" 被整合包其他 mod 抢占）

@@ -11,7 +11,7 @@ public class ItemSkillRedstone extends ItemSkill {
 
     public ItemSkillRedstone() {
         super(SKILL_ID);
-        setUnlocalizedName("skill_redstone");
+        setUnlocalizedName("mciot_skill_redstone");
         setTextureName("minecraftiot:skill_redstone");
     }
 

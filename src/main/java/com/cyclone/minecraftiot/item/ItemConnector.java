@@ -9,7 +9,7 @@ import net.minecraft.world.World;
 
 public class ItemConnector extends Item {
     public ItemConnector() {
-        setUnlocalizedName("connector");
+        setUnlocalizedName("mciot_connector");
         setTextureName("minecraftiot:connector"); // 物品图集自动拼 textures/items/，贴图位于 textures/items/connector.png
     }
 

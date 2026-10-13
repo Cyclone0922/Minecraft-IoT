@@ -18,7 +18,7 @@ public class ItemScriptCopier extends Item {
 
     public ItemScriptCopier() {
         setMaxStackSize(1);
-        setUnlocalizedName("script_copier");
+        setUnlocalizedName("mciot_script_copier");
         setTextureName("minecraftiot:script_copier");
         setCreativeTab(net.minecraft.creativetab.CreativeTabs.tabMisc);
     }
